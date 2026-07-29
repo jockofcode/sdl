@@ -9,6 +9,8 @@ Uses Spinel's built-in FFI DSL (`ffi_lib`, `ffi_func`, `ffi_const`) — no exter
 - Spinel (`spin`)
 - SDL2 (`brew install sdl2` on macOS)
 
+The first build compiles a small C shim against your local SDL2 installation. Spin will prompt you to allow it — answer `always` to permanently trust it, or run `spin trust sdl` beforehand to skip the prompt entirely.
+
 ## Usage
 
 Create a new project and add sdl as a dependency:

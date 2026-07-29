@@ -5,3 +5,11 @@ description = "SDL2 graphics bindings for Spinel"
 authors     = ["Branden Giacoletto"]
 
 # published repos are conventionally named spinel-sdl
+
+[[build]]
+workdir   = "sdl"
+command   = "cc -O2 -I/opt/homebrew/include/SDL2 -c shim.c -o shim.o && ar rcs libsdl_shim.a shim.o"
+artifacts = ["libsdl_shim.a"]
+
+[native]
+libs = ["${build.out}/libsdl_shim.a", "/opt/homebrew/lib/libSDL2.dylib"]
