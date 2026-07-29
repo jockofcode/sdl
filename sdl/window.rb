@@ -3,9 +3,11 @@ module SDL
     attr_reader :ptr
 
     def initialize(title, x: LibSDL::WINDOWPOS_CENTERED, y: LibSDL::WINDOWPOS_CENTERED,
-                   width: 800, height: 600, flags: LibSDL::WINDOW_SHOWN | LibSDL::WINDOW_RESIZABLE)
-      @ptr = LibSDL.SDL_CreateWindow(title, x, y, width, height, flags)
+                   width: 800, height: 600, flags: LibSDL::WINDOW_RESIZABLE)
+      @ptr = LibSDL.SDL_CreateWindow(title, width, height, flags)
       Log.write("SDL_CreateWindow: #{@ptr == nil ? "NULL — #{LibSDL.SDL_GetError}" : "ok"}")
+      # SDL3 dropped x/y from window creation — position it separately.
+      LibSDL.SDL_SetWindowPosition(@ptr, x, y) unless @ptr == nil
     end
 
     def width

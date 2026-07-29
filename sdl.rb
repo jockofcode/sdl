@@ -1,6 +1,8 @@
 require_relative "sdl/log"
 require_relative "sdl/ffi"
 require_relative "sdl/color"
+require_relative "sdl/font"
+require_relative "sdl/fonts"
 require_relative "sdl/window"
 require_relative "sdl/renderer"
 require_relative "sdl/event"

@@ -1,4 +1,5 @@
-#include <SDL.h>
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <stdint.h>
 
 /* Static event buffer — populated by sdl_poll_event(), read by the field accessors. */
@@ -12,19 +13,21 @@ intptr_t sdl_event_type(void) {
     return (intptr_t)sdl_event.type;
 }
 
-/* Key event fields */
-intptr_t sdl_key_sym(void) { return (intptr_t)sdl_event.key.keysym.sym; }
-intptr_t sdl_key_mod(void) { return (intptr_t)sdl_event.key.keysym.mod; }
+/* Key event fields — SDL3 flattened the old .key.keysym.{sym,mod} indirection to .key.{key,mod}. */
+intptr_t sdl_key_sym(void) { return (intptr_t)sdl_event.key.key; }
+intptr_t sdl_key_mod(void) { return (intptr_t)sdl_event.key.mod; }
 
-/* Mouse motion / button fields — check event type to pick the right union member */
+/* Mouse motion / button fields — check event type to pick the right union
+   member. Coordinates are float in SDL3; truncate to int for this
+   binding's pixel-integer call sites. */
 intptr_t sdl_mouse_x(void) {
-    if (sdl_event.type == SDL_MOUSEMOTION)
+    if (sdl_event.type == SDL_EVENT_MOUSE_MOTION)
         return (intptr_t)sdl_event.motion.x;
     return (intptr_t)sdl_event.button.x;
 }
 
 intptr_t sdl_mouse_y(void) {
-    if (sdl_event.type == SDL_MOUSEMOTION)
+    if (sdl_event.type == SDL_EVENT_MOUSE_MOTION)
         return (intptr_t)sdl_event.motion.y;
     return (intptr_t)sdl_event.button.y;
 }
@@ -32,23 +35,23 @@ intptr_t sdl_mouse_y(void) {
 intptr_t sdl_mouse_button(void)  { return (intptr_t)sdl_event.button.button; }
 intptr_t sdl_mouse_clicks(void)  { return (intptr_t)sdl_event.button.clicks; }
 
-/* Mouse wheel fields */
-intptr_t sdl_wheel_x(void) { return (intptr_t)sdl_event.wheel.x; }
-intptr_t sdl_wheel_y(void) { return (intptr_t)sdl_event.wheel.y; }
+/* Mouse wheel fields — use SDL3's integer_x/integer_y (whole scroll
+   "ticks"), the closest match to SDL2's originally-integer wheel.x/y,
+   rather than the new fractional x/y floats. */
+intptr_t sdl_wheel_x(void) { return (intptr_t)sdl_event.wheel.integer_x; }
+intptr_t sdl_wheel_y(void) { return (intptr_t)sdl_event.wheel.integer_y; }
 
-/* Window event sub-ID */
-intptr_t sdl_window_event_id(void) { return (intptr_t)sdl_event.window.event; }
-
-/* SDL_Rect wrappers — SDL_RenderFillRect / SDL_RenderDrawRect take a struct
-   pointer that can't be constructed directly from Ruby, so we build it here. */
+/* SDL_FRect wrappers — SDL_RenderFillRect / SDL_RenderRect (renamed from
+   SDL_RenderDrawRect) take a float-rect struct pointer that can't be
+   constructed directly from Ruby, so we build it here. */
 intptr_t sdl_render_fill_rect(SDL_Renderer *r, int x, int y, int w, int h) {
-    SDL_Rect rect = {x, y, w, h};
+    SDL_FRect rect = {(float)x, (float)y, (float)w, (float)h};
     return (intptr_t)SDL_RenderFillRect(r, &rect);
 }
 
 intptr_t sdl_render_draw_rect(SDL_Renderer *r, int x, int y, int w, int h) {
-    SDL_Rect rect = {x, y, w, h};
-    return (intptr_t)SDL_RenderDrawRect(r, &rect);
+    SDL_FRect rect = {(float)x, (float)y, (float)w, (float)h};
+    return (intptr_t)SDL_RenderRect(r, &rect);
 }
 
 /* SDL_GetWindowSize takes int* out-parameters — expose each axis separately. */
@@ -62,4 +65,34 @@ intptr_t sdl_get_window_height(SDL_Window *w) {
     int width, height;
     SDL_GetWindowSize(w, &width, &height);
     return (intptr_t)height;
+}
+
+/* TTF_RenderText_Blended's SDL_Color arg is passed by value, which the FFI
+   DSL can't express — take components as ints and build the struct here.
+   length=0 tells SDL_ttf to treat text as NUL-terminated. */
+intptr_t sdl_ttf_render_text_blended(TTF_Font *font, const char *text, int r, int g, int b, int a) {
+    SDL_Color fg = {(Uint8)r, (Uint8)g, (Uint8)b, (Uint8)a};
+    return (intptr_t)TTF_RenderText_Blended(font, text, 0, fg);
+}
+
+/* SDL_GetTextureSize takes float* out-parameters, same story as the window
+   size helpers above. */
+intptr_t sdl_get_texture_width(SDL_Texture *t) {
+    float w, h;
+    SDL_GetTextureSize(t, &w, &h);
+    return (intptr_t)w;
+}
+
+intptr_t sdl_get_texture_height(SDL_Texture *t) {
+    float w, h;
+    SDL_GetTextureSize(t, &w, &h);
+    return (intptr_t)h;
+}
+
+/* SDL_RenderTexture's dst is an SDL_FRect pointer — same construction-site
+   problem as the rect helpers above. Passing NULL as srcrect renders the
+   whole texture. */
+intptr_t sdl_render_texture(SDL_Renderer *r, SDL_Texture *t, int x, int y, int w, int h) {
+    SDL_FRect dst = {(float)x, (float)y, (float)w, (float)h};
+    return (intptr_t)SDL_RenderTexture(r, t, NULL, &dst);
 }

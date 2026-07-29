@@ -1,14 +1,12 @@
 require "sdl"
 
-# Verify event types, key codes, and flag constants match SDL2 ABI values.
+# Verify event types, key codes, and flag constants match SDL3 ABI values.
 puts LibSDL::INIT_VIDEO
 puts LibSDL::INIT_EVENTS
 puts LibSDL::WINDOWPOS_CENTERED
 puts LibSDL::WINDOWPOS_UNDEFINED
-puts LibSDL::WINDOW_SHOWN
 puts LibSDL::WINDOW_RESIZABLE
-puts LibSDL::RENDERER_ACCELERATED
-puts LibSDL::RENDERER_PRESENTVSYNC
+puts LibSDL::EVENT_WINDOW_PIXEL_SIZE_CHANGED
 puts LibSDL::QUIT
 puts LibSDL::KEYDOWN
 puts LibSDL::KEYUP

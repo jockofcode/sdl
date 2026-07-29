@@ -32,11 +32,9 @@ SDL::Screen.open("Bouncing Box Demo", width: 800, height: 600) do |window, rende
         running = false
       elsif event_type == LibSDL::KEYDOWN
         running = false if SDL::Event.key_sym == LibSDL::K_ESCAPE
-      elsif event_type == LibSDL::WINDOWEVENT
-        if SDL::Event.window_event_id == LibSDL::WINDOWEVENT_SIZE_CHANGED
-          w = window.width
-          h = window.height
-        end
+      elsif event_type == LibSDL::EVENT_WINDOW_PIXEL_SIZE_CHANGED
+        w = window.width
+        h = window.height
       end
     end
 

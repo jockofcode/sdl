@@ -4,12 +4,19 @@ module SDL
     # SDL_Init / SDL_Quit bracket the block; the renderer and window are closed
     # in the ensure clause so they're always cleaned up even on exception.
     def self.open(title, width: 800, height: 600,
-                  flags: LibSDL::WINDOW_SHOWN | LibSDL::WINDOW_RESIZABLE)
-      if LibSDL.SDL_Init(LibSDL::INIT_VIDEO) != 0
+                  flags: LibSDL::WINDOW_RESIZABLE)
+      unless LibSDL.SDL_Init(LibSDL::INIT_VIDEO)
         Log.write("SDL_Init failed: #{LibSDL.SDL_GetError}")
         return
       end
       Log.write("SDL_Init: ok")
+
+      unless LibSDL.TTF_Init
+        Log.write("TTF_Init failed: #{LibSDL.SDL_GetError}")
+        LibSDL.SDL_Quit
+        return
+      end
+      Log.write("TTF_Init: ok")
 
       window   = Window.new(title, width: width, height: height, flags: flags)
       renderer = Renderer.new(window)
@@ -19,6 +26,8 @@ module SDL
       ensure
         renderer.close
         window.close
+        LibSDL.TTF_Quit
+        Log.write("TTF_Quit: done")
         LibSDL.SDL_Quit
         Log.write("SDL_Quit: done")
         Log.close

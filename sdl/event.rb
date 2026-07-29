@@ -58,10 +58,5 @@ module SDL
     def self.wheel_y
       LibSDL.sdl_wheel_y
     end
-
-    # Window event sub-ID
-    def self.window_event_id
-      LibSDL.sdl_window_event_id
-    end
   end
 end
