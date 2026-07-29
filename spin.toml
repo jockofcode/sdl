@@ -1,0 +1,7 @@
+[package]
+name        = "sdl"
+version     = "0.1.0"
+description = "SDL2 graphics bindings for Spinel"
+authors     = ["Branden Giacoletto"]
+
+# published repos are conventionally named spinel-sdl
