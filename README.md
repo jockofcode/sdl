@@ -205,6 +205,7 @@ SDL2's `SDL_Event` is a C union and `SDL_Rect` is a struct — neither can be co
 | Program | Description |
 |---------|-------------|
 | `bin/demo.rb` | Bouncing colored rectangle |
+| `bin/snake.rb` | Classic Snake — arrow keys to steer, R to restart, Esc to quit |
 
 Build all examples:
 
