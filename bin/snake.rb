@@ -11,9 +11,6 @@ HEIGHT = CELL * ROWS
 MOVE_INTERVAL = 100 # ms between grid steps
 R_KEY = "r".ord
 
-# sdl/fonts.rb can't build this path itself — see the comment there.
-FONT_PATH = File.join(__dir__, "..", "sdl", "fonts", SDL::Fonts::VT323)
-
 def random_cell
   [rand(COLS), rand(ROWS)]
 end
@@ -42,7 +39,7 @@ def reset_state
 end
 
 SDL::Screen.open("Snake", width: WIDTH, height: HEIGHT, flags: 0) do |window, renderer|
-  font      = SDL::Font.new(FONT_PATH, 28)
+  font      = SDL::Font.bundled(SDL::Fonts::VT323_NAME, 28)
   state     = reset_state
   last_move = SDL::Screen.ticks
   running   = true

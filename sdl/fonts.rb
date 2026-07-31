@@ -12,5 +12,14 @@ module SDL
     PUBLIC_SANS    = "PublicSans-Regular.ttf"
     JETBRAINS_MONO = "JetBrainsMono-Regular.ttf"
     VT323          = "VT323-Regular.ttf"
+
+    # Short keys for SDL::Font.bundled — select the byte array compiled
+    # into the binary by build_shim.sh (see shim.c's
+    # sdl_open_bundled_font), independent of the filenames above (which
+    # remain for the path-based SDL::Font.new + __dir__ pattern, still
+    # fine when you know the binary will run from its own source tree).
+    PUBLIC_SANS_NAME    = "public_sans"
+    JETBRAINS_MONO_NAME = "jetbrains_mono"
+    VT323_NAME          = "vt323"
   end
 end

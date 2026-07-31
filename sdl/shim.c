@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <stdint.h>
+#include <string.h>
 
 /* Static event buffer — populated by sdl_poll_event(), read by the field accessors. */
 static SDL_Event sdl_event;
@@ -95,4 +96,40 @@ intptr_t sdl_get_texture_height(SDL_Texture *t) {
 intptr_t sdl_render_texture(SDL_Renderer *r, SDL_Texture *t, int x, int y, int w, int h) {
     SDL_FRect dst = {(float)x, (float)y, (float)w, (float)h};
     return (intptr_t)SDL_RenderTexture(r, t, NULL, &dst);
+}
+
+/* Bundled fonts, compiled in as byte arrays by build_shim.sh (see
+   bin2c.c and fonts_embed.c). Spinel's __dir__ is a compile-time literal
+   of the source tree that compiled the binary, not the running
+   executable's location, so a path built from it (as TTF_OpenFont
+   requires) only resolves on that same machine. Loading straight from
+   memory via SDL_IOFromConstMem + TTF_OpenFontIO sidesteps that: no
+   path, so a compiled binary carries its own fonts wherever it goes. */
+extern const unsigned char sdl_font_bytes_vt323[];
+extern const unsigned int  sdl_font_bytes_vt323_len;
+extern const unsigned char sdl_font_bytes_public_sans[];
+extern const unsigned int  sdl_font_bytes_public_sans_len;
+extern const unsigned char sdl_font_bytes_jetbrains_mono[];
+extern const unsigned int  sdl_font_bytes_jetbrains_mono_len;
+
+intptr_t sdl_open_bundled_font(const char *name, float size) {
+    const unsigned char *bytes = NULL;
+    unsigned int len = 0;
+
+    if (strcmp(name, "vt323") == 0) {
+        bytes = sdl_font_bytes_vt323;
+        len   = sdl_font_bytes_vt323_len;
+    } else if (strcmp(name, "public_sans") == 0) {
+        bytes = sdl_font_bytes_public_sans;
+        len   = sdl_font_bytes_public_sans_len;
+    } else if (strcmp(name, "jetbrains_mono") == 0) {
+        bytes = sdl_font_bytes_jetbrains_mono;
+        len   = sdl_font_bytes_jetbrains_mono_len;
+    } else {
+        return (intptr_t)NULL;
+    }
+
+    SDL_IOStream *io = SDL_IOFromConstMem(bytes, (size_t)len);
+    if (!io) return (intptr_t)NULL;
+    return (intptr_t)TTF_OpenFontIO(io, true, size);
 }

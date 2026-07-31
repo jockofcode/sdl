@@ -121,6 +121,11 @@ module LibSDL
   ffi_func :TTF_OpenFont,  [:str, :float],    :ptr
   ffi_func :TTF_CloseFont, [:ptr],            :void
 
+  # Shim function (see sdl/shim.c) — opens one of the fonts embedded into
+  # this binary by build_shim.sh, with no filesystem path involved. See
+  # SDL::Font.bundled and the README's "Fonts and portability" section.
+  ffi_func :sdl_open_bundled_font, [:str, :float], :ptr
+
   # Surface -> texture handoff for rendering rasterized text.
   ffi_func :SDL_CreateTextureFromSurface, [:ptr, :ptr], :ptr
   ffi_func :SDL_DestroySurface,           [:ptr],       :void

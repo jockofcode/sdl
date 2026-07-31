@@ -149,6 +149,44 @@ renderer.draw_color(*SDL::Color::WHITE)
 
 Available colors: `BLACK WHITE RED GREEN BLUE YELLOW CYAN MAGENTA ORANGE GRAY`
 
+### `SDL::Font`
+
+```ruby
+renderer.draw_text(font, "Score: 0", 8, 4, 255, 255, 255, 255)
+```
+
+Two ways to load one:
+
+```ruby
+# 1. One of sdl's own bundled fonts (SDL::Fonts), loaded from bytes
+#    compiled directly into the binary -- no filesystem path involved.
+font = SDL::Font.bundled(SDL::Fonts::VT323_NAME, 28)
+# SDL::Fonts::PUBLIC_SANS_NAME / ::JETBRAINS_MONO_NAME also available.
+
+# 2. Any font file at a path you supply yourself.
+font = SDL::Font.new("/absolute/path/to/font.ttf", 28)
+
+font.close   # call once you're done with it (e.g. after Screen.open's block)
+```
+
+**Prefer `SDL::Font.bundled` over building a path with `__dir__`.** Spinel's
+`__dir__` is a *compile-time* literal of the source file's directory on the
+machine that ran `spin build` — it is not derived from the running
+executable's location at runtime. A path like
+`File.join(__dir__, "..", "assets", "fonts", "whatever.ttf")` bakes in that
+build machine's absolute path, so it keeps working as long as you run the
+binary from the same checkout on the same machine, but breaks silently the
+moment you copy the compiled binary anywhere else (another machine, a
+`dist/` folder, a released artifact) — `TTF_OpenFont` returns `NULL` for
+the missing path, and `renderer.draw_text` just quietly draws nothing, with
+every other graphic (which has no file dependency) rendering fine. If your
+app needs its own custom font rather than one of sdl's bundled ones, embed
+it the same way sdl embeds its own (see `sdl/bin2c.c` and
+`build_shim.sh` for the pattern: convert the `.ttf` into a compiled-in byte
+array in your own `[[build]]` step, then open it via `SDL_IOFromConstMem` +
+`TTF_OpenFontIO` through your own small FFI shim) rather than shipping the
+font file alongside the binary and hoping the path holds up.
+
 ### `SDL::Log`
 
 Optional file logger. Useful when you can't write to stdout during an SDL session.
@@ -199,6 +237,8 @@ Printable characters map 1:1 to ASCII. Special keys:
 ## C shim
 
 SDL3's `SDL_Event` is a C union and `SDL_FRect` is a struct — neither can be constructed directly through Spinel's FFI DSL. `sdl/shim.c` is compiled into the binary alongside the generated code and provides plain-function accessors for event fields and rect-based draw calls. The approach is identical to the `mouse_shim.c` in the spinel-ncurses library.
+
+`shim.c` also embeds sdl's bundled fonts (`sdl/fonts/*.ttf`) as compiled-in byte arrays, generated at build time by `bin2c.c` and linked in by `build_shim.sh`. `sdl_open_bundled_font` wraps them with `SDL_IOFromConstMem` + `TTF_OpenFontIO` so `SDL::Font.bundled` never touches the filesystem at runtime — see "Fonts and portability" above for why that matters.
 
 ## Examples
 
