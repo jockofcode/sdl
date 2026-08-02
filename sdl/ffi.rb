@@ -1,6 +1,15 @@
 module LibSDL
   ffi_lib "SDL3"
   ffi_lib "SDL3_ttf"
+  # No ffi_lib "SDL3_image" — unlike SDL3/SDL3_ttf (both installed as
+  # libSDL3.a/libSDL3_ttf.a, a name -lSDL3/-lSDL3_ttf can resolve),
+  # SDL3_image's build script (see sdl/native/sdl3_image/build.sh) merges
+  # it with its vendored libpng/zlib/libjpeg deps into one differently-named
+  # archive (libSDL3_image_bundle.a) since the vendored deps' own target
+  # names weren't confirmed from this environment. [native].libs below
+  # already links that archive by its full ${build.out} path; ffi_lib would
+  # only add a redundant, wrongly-named -lSDL3_image the linker can't
+  # resolve.
   # No ffi_cflags here: with SDL3/SDL3_ttf now built by spin.toml's [[build]]
   # entries (see there), their headers only exist transiently inside each
   # entry's own scratch dir (or as tarballs under ${build.out}) — there is
@@ -10,8 +19,11 @@ module LibSDL
   # sdl/build_shim.sh, independent of this DSL.
 
   # Init flags
-  ffi_const :INIT_VIDEO,  0x00000020
-  ffi_const :INIT_EVENTS, 0x00004000
+  ffi_const :INIT_VIDEO,    0x00000020
+  ffi_const :INIT_AUDIO,    0x00000010
+  ffi_const :INIT_JOYSTICK, 0x00000200
+  ffi_const :INIT_GAMEPAD,  0x00002000
+  ffi_const :INIT_EVENTS,   0x00004000
 
   # Window position
   ffi_const :WINDOWPOS_CENTERED,  0x2FFF0000
@@ -36,6 +48,29 @@ module LibSDL
   # uses is declared; add more EVENT_WINDOW_* as needed straight from
   # SDL_events.h's SDL_EventType enum (window events run 0x202-0x210+).
   ffi_const :EVENT_WINDOW_PIXEL_SIZE_CHANGED, 0x207
+
+  # Gamepad events
+  ffi_const :EVENT_GAMEPAD_AXIS_MOTION,  0x650
+  ffi_const :EVENT_GAMEPAD_BUTTON_DOWN,  0x651
+  ffi_const :EVENT_GAMEPAD_BUTTON_UP,    0x652
+  ffi_const :EVENT_GAMEPAD_ADDED,        0x653
+  ffi_const :EVENT_GAMEPAD_REMOVED,      0x654
+
+  # Touch events
+  ffi_const :EVENT_FINGER_DOWN,     0x700
+  ffi_const :EVENT_FINGER_UP,       0x701
+  ffi_const :EVENT_FINGER_MOTION,   0x702
+  ffi_const :EVENT_FINGER_CANCELED, 0x703
+
+  # Pen events — SDL_EVENT_PEN_PROXIMITY_IN/OUT (0x1300/0x1301, pen enters/
+  # leaves range) aren't exposed as separate constants here; everything
+  # else in the run is.
+  ffi_const :EVENT_PEN_DOWN,        0x1302
+  ffi_const :EVENT_PEN_UP,          0x1303
+  ffi_const :EVENT_PEN_BUTTON_DOWN, 0x1304
+  ffi_const :EVENT_PEN_BUTTON_UP,   0x1305
+  ffi_const :EVENT_PEN_MOTION,      0x1306
+  ffi_const :EVENT_PEN_AXIS,        0x1307
 
   # Key modifier flags
   ffi_const :KMOD_NONE,   0x0000
@@ -80,6 +115,48 @@ module LibSDL
   ffi_const :BUTTON_LEFT,   1
   ffi_const :BUTTON_MIDDLE, 2
   ffi_const :BUTTON_RIGHT,  3
+
+  # SDL_GamepadButton — matches SDL3's enum order exactly (SOUTH=0..
+  # DPAD_RIGHT=15); the buttons past DPAD_RIGHT (MISC1, paddles, touchpad,
+  # ...) aren't named here, pass their raw int if needed.
+  ffi_const :GAMEPAD_BUTTON_SOUTH,          0
+  ffi_const :GAMEPAD_BUTTON_EAST,           1
+  ffi_const :GAMEPAD_BUTTON_WEST,           2
+  ffi_const :GAMEPAD_BUTTON_NORTH,          3
+  ffi_const :GAMEPAD_BUTTON_BACK,           4
+  ffi_const :GAMEPAD_BUTTON_GUIDE,          5
+  ffi_const :GAMEPAD_BUTTON_START,          6
+  ffi_const :GAMEPAD_BUTTON_LEFT_STICK,     7
+  ffi_const :GAMEPAD_BUTTON_RIGHT_STICK,    8
+  ffi_const :GAMEPAD_BUTTON_LEFT_SHOULDER,  9
+  ffi_const :GAMEPAD_BUTTON_RIGHT_SHOULDER, 10
+  ffi_const :GAMEPAD_BUTTON_DPAD_UP,        11
+  ffi_const :GAMEPAD_BUTTON_DPAD_DOWN,      12
+  ffi_const :GAMEPAD_BUTTON_DPAD_LEFT,      13
+  ffi_const :GAMEPAD_BUTTON_DPAD_RIGHT,     14
+
+  # SDL_GamepadAxis — matches SDL3's enum order exactly.
+  ffi_const :GAMEPAD_AXIS_LEFTX,         0
+  ffi_const :GAMEPAD_AXIS_LEFTY,         1
+  ffi_const :GAMEPAD_AXIS_RIGHTX,        2
+  ffi_const :GAMEPAD_AXIS_RIGHTY,        3
+  ffi_const :GAMEPAD_AXIS_LEFT_TRIGGER,  4
+  ffi_const :GAMEPAD_AXIS_RIGHT_TRIGGER, 5
+
+  # SDL_PenAxis — matches SDL3's enum order exactly.
+  ffi_const :PEN_AXIS_PRESSURE,            0
+  ffi_const :PEN_AXIS_XTILT,               1
+  ffi_const :PEN_AXIS_YTILT,               2
+  ffi_const :PEN_AXIS_DISTANCE,            3
+  ffi_const :PEN_AXIS_ROTATION,            4
+  ffi_const :PEN_AXIS_SLIDER,              5
+  ffi_const :PEN_AXIS_TANGENTIAL_PRESSURE, 6
+
+  # SDL_AudioFormat — little-endian values only (LP64 arm64/x86_64 target,
+  # per ffi_spec.c's own header comment). SDL_AUDIO_S16/_F32 without an
+  # LE/BE suffix resolve to these same values on a little-endian build.
+  ffi_const :AUDIO_S16, 0x8010
+  ffi_const :AUDIO_F32, 0x8120
 
   # Lifecycle — SDL_Init/error-returning render & window calls now return
   # real bool (spiked and confirmed safe to declare :bool — see
@@ -152,4 +229,90 @@ module LibSDL
   ffi_func :sdl_get_texture_width,  [:ptr], :int
   ffi_func :sdl_get_texture_height, [:ptr], :int
   ffi_func :sdl_render_texture, [:ptr, :ptr, :int, :int, :int, :int], :int
+
+  # Windows — multi-window dispatch. SDL_GetWindowID lets a program match
+  # its own Window objects against a polled event's window (see
+  # sdl_event_window_id below).
+  ffi_func :SDL_GetWindowID, [:ptr], :int
+
+  # Shim function (see sdl/shim.c) — which window a polled event belongs
+  # to; dispatches on event category internally since SDL3 doesn't expose
+  # windowID through one shared union member.
+  ffi_func :sdl_event_window_id, [], :int
+
+  # Gamepad — poll/query-based, no callbacks needed. SDL_GetGamepadButton's
+  # 2nd arg and SDL_GetGamepadAxis's are SDL_GamepadButton/SDL_GamepadAxis
+  # enums (int-sized); pass the GAMEPAD_BUTTON_*/GAMEPAD_AXIS_* constants
+  # above. SDL_GetGamepadAxis's real return type is Sint16 (-32768..32767),
+  # declared :int16 to match the ABI width exactly rather than assume the
+  # same wide-return safety already spiked for :bool (see the SDL3
+  # migration notes on SDL_CreateRenderer above) extends to every narrow
+  # return type.
+  ffi_func :SDL_OpenGamepad,      [:uint32], :ptr
+  ffi_func :SDL_CloseGamepad,     [:ptr],    :void
+  ffi_func :SDL_GamepadConnected, [:ptr],    :bool
+  ffi_func :SDL_GetGamepadName,   [:ptr],    :str
+  ffi_func :SDL_GetGamepadButton, [:ptr, :int], :bool
+  ffi_func :SDL_GetGamepadAxis,   [:ptr, :int], :int16
+  ffi_func :SDL_RumbleGamepad,    [:ptr, :uint16, :uint16, :uint32], :bool
+
+  # Shim functions (see sdl/shim.c) — gamepad enumeration (wraps
+  # SDL_GetGamepads' int*-out-param + malloc'd-array return, which the FFI
+  # DSL has no direct spec for) and gamepad event field access.
+  ffi_func :sdl_gamepad_count,       [], :int
+  ffi_func :sdl_gamepad_id_at,       [:int], :int
+  ffi_func :sdl_gamepad_which,       [], :int
+  ffi_func :sdl_gamepad_button,      [], :int
+  ffi_func :sdl_gamepad_button_down, [], :int
+  ffi_func :sdl_gamepad_axis,        [], :int
+  ffi_func :sdl_gamepad_axis_value,  [], :int
+
+  # Shim functions (see sdl/shim.c) — touch event fields. Real `float`
+  # return type: these are normalized 0..1 / -1..1 values, not integers.
+  ffi_func :sdl_touch_x,        [], :float
+  ffi_func :sdl_touch_y,        [], :float
+  ffi_func :sdl_touch_dx,       [], :float
+  ffi_func :sdl_touch_dy,       [], :float
+  ffi_func :sdl_touch_pressure, [], :float
+
+  # Shim functions (see sdl/shim.c) — pen event fields.
+  ffi_func :sdl_pen_x,            [], :float
+  ffi_func :sdl_pen_y,            [], :float
+  ffi_func :sdl_pen_down,         [], :int
+  ffi_func :sdl_pen_eraser,       [], :int
+  ffi_func :sdl_pen_button,       [], :int
+  ffi_func :sdl_pen_button_down,  [], :int
+  ffi_func :sdl_pen_axis,         [], :int
+  ffi_func :sdl_pen_axis_value,   [], :float
+
+  # Shim functions (see sdl/shim.c) — audio. sdl_audio_beep synthesizes and
+  # queues a sine-wave tone on a lazily-opened process-lifetime stream (see
+  # SDL::Audio.beep); the sdl_wav_* family loads/plays/frees a WAV file on
+  # its own dedicated stream (see SDL::Sound).
+  ffi_func :sdl_audio_beep,      [:int, :int, :int], :int
+  ffi_func :sdl_audio_queued_ms, [], :int
+  ffi_func :sdl_load_wav,        [:str], :ptr
+  ffi_func :sdl_wav_play,        [:ptr], :int
+  ffi_func :sdl_wav_len,         [:ptr], :int
+  ffi_func :sdl_wav_free,        [:ptr], :int
+
+  # SDL_image — IMG_Load returns a Surface (format-neutral, use
+  # SDL_CreateTextureFromSurface + sdl_surface_width/height below to turn
+  # it into a drawable Texture); IMG_LoadTexture is the one-step shortcut
+  # straight to a Renderer-bound Texture, used by SDL::Texture.load.
+  ffi_func :IMG_Load,        [:str],        :ptr
+  ffi_func :IMG_LoadTexture, [:ptr, :str],  :ptr
+
+  # Shim functions (see sdl/shim.c) — SDL_Surface's w/h field reads.
+  ffi_func :sdl_surface_width,  [:ptr], :int
+  ffi_func :sdl_surface_height, [:ptr], :int
+
+  # Shim functions (see sdl/shim.c) — test-support synthetic event
+  # injection (SDL_PushEvent-backed). Not part of the public binding
+  # surface; used only by test/*.rb to exercise the touch/pen/gamepad
+  # event-field accessors above without real hardware.
+  ffi_func :sdl_test_push_touch_event, [:float, :float, :float, :float, :float], :int
+  ffi_func :sdl_test_push_pen_event,   [:float, :float, :float], :int
+  ffi_func :sdl_test_push_gamepad_button_event, [:int, :int], :int
+  ffi_func :sdl_test_push_gamepad_axis_event,   [:int, :int], :int
 end

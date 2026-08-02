@@ -58,6 +58,15 @@ module SDL
       LibSDL.SDL_DestroyTexture(texture)
     end
 
+    # Draws a loaded SDL::Texture at (x, y). w/h default to the texture's
+    # own pixel size (reuses the same generic shim call draw_text already
+    # drives — sdl_render_texture never was text-specific, see shim.c).
+    def draw_texture(texture, x, y, w: nil, h: nil)
+      w ||= texture.width
+      h ||= texture.height
+      LibSDL.sdl_render_texture(@ptr, texture.ptr, x, y, w, h)
+    end
+
     def close
       LibSDL.SDL_DestroyRenderer(@ptr)
       Log.write("SDL_DestroyRenderer: done")

@@ -58,5 +58,88 @@ module SDL
     def self.wheel_y
       LibSDL.sdl_wheel_y
     end
+
+    # Which window this event belongs to (SDL_WindowID) — matches
+    # SDL::Window#id. Multi-window programs use this to route a polled
+    # event to the right Window/Renderer pair.
+    def self.window_id
+      LibSDL.sdl_event_window_id
+    end
+
+    # Gamepad event fields
+    def self.gamepad_which
+      LibSDL.sdl_gamepad_which
+    end
+
+    def self.gamepad_button
+      LibSDL.sdl_gamepad_button
+    end
+
+    def self.gamepad_button_down?
+      LibSDL.sdl_gamepad_button_down != 0
+    end
+
+    def self.gamepad_axis
+      LibSDL.sdl_gamepad_axis
+    end
+
+    def self.gamepad_axis_value
+      LibSDL.sdl_gamepad_axis_value
+    end
+
+    # Touch event fields — x/y normalized 0..1, dx/dy normalized -1..1,
+    # pressure normalized 0..1.
+    def self.touch_x
+      LibSDL.sdl_touch_x
+    end
+
+    def self.touch_y
+      LibSDL.sdl_touch_y
+    end
+
+    def self.touch_dx
+      LibSDL.sdl_touch_dx
+    end
+
+    def self.touch_dy
+      LibSDL.sdl_touch_dy
+    end
+
+    def self.touch_pressure
+      LibSDL.sdl_touch_pressure
+    end
+
+    # Pen event fields — x/y are window-relative pixel coordinates.
+    def self.pen_x
+      LibSDL.sdl_pen_x
+    end
+
+    def self.pen_y
+      LibSDL.sdl_pen_y
+    end
+
+    def self.pen_down?
+      LibSDL.sdl_pen_down != 0
+    end
+
+    def self.pen_eraser?
+      LibSDL.sdl_pen_eraser != 0
+    end
+
+    def self.pen_button
+      LibSDL.sdl_pen_button
+    end
+
+    def self.pen_button_down?
+      LibSDL.sdl_pen_button_down != 0
+    end
+
+    def self.pen_axis
+      LibSDL.sdl_pen_axis
+    end
+
+    def self.pen_axis_value
+      LibSDL.sdl_pen_axis_value
+    end
   end
 end

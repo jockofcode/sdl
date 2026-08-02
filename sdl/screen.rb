@@ -5,7 +5,11 @@ module SDL
     # in the ensure clause so they're always cleaned up even on exception.
     def self.open(title, width: 800, height: 600,
                   flags: LibSDL::WINDOW_RESIZABLE)
-      unless LibSDL.SDL_Init(LibSDL::INIT_VIDEO)
+      # GAMEPAD implies JOYSTICK; AUDIO opens no device by itself (that
+      # happens lazily on first SDL::Audio.beep / SDL::Sound.new call) but
+      # still needs the subsystem initialized up front.
+      init_flags = LibSDL::INIT_VIDEO | LibSDL::INIT_GAMEPAD | LibSDL::INIT_AUDIO
+      unless LibSDL.SDL_Init(init_flags)
         Log.write("SDL_Init failed: #{LibSDL.SDL_GetError}")
         return
       end

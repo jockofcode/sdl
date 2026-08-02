@@ -1,15 +1,18 @@
 #!/bin/sh
-# Compiles shim.c against SDL3/SDL3_ttf headers extracted from the tars
-# produced by native/sdl3/build.sh ($1) and native/sdl3_ttf/build.sh ($2) —
-# see spin.toml's [[build]] entries.
+# Compiles shim.c against SDL3/SDL3_ttf/SDL3_image headers extracted from
+# the tars produced by native/sdl3/build.sh ($1), native/sdl3_ttf/build.sh
+# ($2), and native/sdl3_image/build.sh ($3) — see spin.toml's [[build]]
+# entries.
 set -e
 
 SDL3_TAR="$1"
 SDL3_TTF_HEADERS_TAR="$2"
+SDL3_IMAGE_HEADERS_TAR="$3"
 
-mkdir -p _hdrs/sdl3 _hdrs/sdl3_ttf
+mkdir -p _hdrs/sdl3 _hdrs/sdl3_ttf _hdrs/sdl3_image
 tar -xf "$SDL3_TAR" -C _hdrs/sdl3
 tar -xf "$SDL3_TTF_HEADERS_TAR" -C _hdrs/sdl3_ttf
+tar -xf "$SDL3_IMAGE_HEADERS_TAR" -C _hdrs/sdl3_image
 
 # Embed the bundled fonts (sdl/fonts/*.ttf) as compiled-in byte arrays --
 # see bin2c.c and shim.c's sdl_open_bundled_font. This is what lets
@@ -22,6 +25,6 @@ cc -O2 -o bin2c bin2c.c
 ./bin2c fonts/PublicSans-Regular.ttf sdl_font_bytes_public_sans >> fonts_embed.c
 ./bin2c fonts/JetBrainsMono-Regular.ttf sdl_font_bytes_jetbrains_mono >> fonts_embed.c
 
-cc -O2 -I_hdrs/sdl3/include -I_hdrs/sdl3_ttf -c shim.c -o shim.o
+cc -O2 -I_hdrs/sdl3/include -I_hdrs/sdl3_ttf -I_hdrs/sdl3_image -c shim.c -o shim.o
 cc -O2 -c fonts_embed.c -o fonts_embed.o
 ar rcs libsdl_shim.a shim.o fonts_embed.o

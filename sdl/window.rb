@@ -22,6 +22,13 @@ module SDL
       LibSDL.SDL_SetWindowTitle(@ptr, str)
     end
 
+    # SDL_WindowID — matches SDL::Event.window_id on a polled event, for
+    # dispatching events across multiple open windows (see the README's
+    # multi-window section; SDL::Screen.open only ever opens one).
+    def id
+      LibSDL.SDL_GetWindowID(@ptr)
+    end
+
     def close
       LibSDL.SDL_DestroyWindow(@ptr)
       Log.write("SDL_DestroyWindow: done")
