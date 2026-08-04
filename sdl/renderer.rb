@@ -24,12 +24,22 @@ module SDL
       LibSDL.SDL_RenderPresent(@ptr)
     end
 
+    # x/y coerced to Float explicitly: SDL_RenderPoint/SDL_RenderLine are
+    # bound straight to their real SDL functions (both declared :float in
+    # ffi.rb), unlike fill_rect/draw_rect below which go through an
+    # :int-typed shim that casts to float in C. Callers overwhelmingly
+    # compute pixel coordinates as Ints (cursor positions, .to_i'd layout
+    # math, ...); handing a statically-Int value straight to a :float FFI
+    # param reinterprets its int64 bit pattern as a double instead of
+    # converting the numeric value — not a type error, a garbage
+    # coordinate (the point/line ends up effectively invisible, nowhere
+    # near where it should be).
     def draw_point(x, y)
-      LibSDL.SDL_RenderPoint(@ptr, x, y)
+      LibSDL.SDL_RenderPoint(@ptr, x.to_f, y.to_f)
     end
 
     def draw_line(x1, y1, x2, y2)
-      LibSDL.SDL_RenderLine(@ptr, x1, y1, x2, y2)
+      LibSDL.SDL_RenderLine(@ptr, x1.to_f, y1.to_f, x2.to_f, y2.to_f)
     end
 
     def fill_rect(x, y, w, h)
