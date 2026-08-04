@@ -98,6 +98,8 @@ module LibSDL
   ffi_const :K_LEFT,   0x40000050
   ffi_const :K_DOWN,   0x40000051
   ffi_const :K_UP,     0x40000052
+  ffi_const :K_HOME,   0x4000004A
+  ffi_const :K_END,    0x4000004D
 
   # Function keys — unchanged values in SDL3
   ffi_const :K_F1,  0x4000003A
