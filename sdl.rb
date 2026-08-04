@@ -1,6 +1,7 @@
 require_relative "sdl/log"
 require_relative "sdl/ffi"
 require_relative "sdl/color"
+require_relative "sdl/clipboard"
 require_relative "sdl/font"
 require_relative "sdl/fonts"
 require_relative "sdl/window"

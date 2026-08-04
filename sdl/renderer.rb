@@ -40,6 +40,26 @@ module SDL
       LibSDL.sdl_render_draw_rect(@ptr, x, y, w, h)
     end
 
+    # Restricts drawing to (x, y, w, h) until cleared — everything outside
+    # is discarded before it reaches the screen. Needed for scroll-clipped
+    # regions, dropdowns, and any content that must not draw past its
+    # container's bounds.
+    def set_clip_rect(x, y, w, h)
+      LibSDL.sdl_set_render_clip_rect(@ptr, x, y, w, h)
+    end
+
+    def clear_clip_rect
+      LibSDL.sdl_clear_render_clip_rect(@ptr)
+    end
+
+    # Fills an arbitrary convex polygon with one solid color. `points` is a
+    # flat array of coordinates: [x0, y0, x1, y1, x2, y2, ...], at least 3
+    # points (6 elements). Used for shapes fill_rect/draw_rect can't
+    # express — rounded corners, circles, arrows, ...
+    def fill_polygon(points, r, g, b, a = 255)
+      LibSDL.sdl_fill_convex_polygon(@ptr, points, points.length, r, g, b, a)
+    end
+
     # Renders text at (x, y) in one shot: rasterizes to a surface, uploads it
     # as a texture, draws it, and frees both. No caching — fine for scores/
     # HUD text redrawn a few times a second, but re-rasterizes on every call,

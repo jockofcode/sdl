@@ -141,5 +141,12 @@ module SDL
     def self.pen_axis_value
       LibSDL.sdl_pen_axis_value
     end
+
+    # Composed text for an SDL_EVENT_TEXT_INPUT event — only meaningful
+    # right after Event.poll returns LibSDL::TEXT_INPUT, and only while the
+    # owning window has called Window#start_text_input.
+    def self.text_input
+      LibSDL.sdl_text_input_text
+    end
   end
 end

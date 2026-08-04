@@ -38,6 +38,8 @@ module LibSDL
   ffi_const :QUIT,            0x100
   ffi_const :KEYDOWN,         0x300
   ffi_const :KEYUP,           0x301
+  ffi_const :TEXT_EDITING,    0x302
+  ffi_const :TEXT_INPUT,      0x303
   ffi_const :MOUSEMOTION,     0x400
   ffi_const :MOUSEBUTTONDOWN, 0x401
   ffi_const :MOUSEBUTTONUP,   0x402
@@ -224,11 +226,43 @@ module LibSDL
   ffi_func :sdl_get_window_width,  [:ptr], :int
   ffi_func :sdl_get_window_height, [:ptr], :int
 
+  # Shim functions (see sdl/shim.c) — clip/scissor rect and filled-polygon
+  # geometry, both needed by an immediate-mode UI's draw list (scroll-clipped
+  # child regions, rounded corners, circular color pickers, ...) that plain
+  # fill_rect/draw_rect can't express. fill_convex_polygon's `points` arg is
+  # a flat [x0,y0,x1,y1,...] Array<Float>; its `n` companion is the element
+  # count (2 * point count), not the point count — same :float_array + count
+  # convention FFI.md documents for array args generally.
+  ffi_func :sdl_set_render_clip_rect,   [:ptr, :int, :int, :int, :int], :int
+  ffi_func :sdl_clear_render_clip_rect, [:ptr], :int
+  ffi_func :sdl_fill_convex_polygon, [:ptr, :float_array, :size_t, :int, :int, :int, :int], :int
+
   # Shim functions (see sdl/shim.c) — text rendering
   ffi_func :sdl_ttf_render_text_blended, [:ptr, :str, :int, :int, :int, :int], :ptr
   ffi_func :sdl_get_texture_width,  [:ptr], :int
   ffi_func :sdl_get_texture_height, [:ptr], :int
   ffi_func :sdl_render_texture, [:ptr, :ptr, :int, :int, :int, :int], :int
+
+  # Shim functions (see sdl/shim.c) — text measurement, needed for layout
+  # (button auto-sizing, text wrapping, caret placement in input fields).
+  ffi_func :sdl_measure_text_width,  [:ptr, :str], :int
+  ffi_func :sdl_measure_text_height, [:ptr, :str], :int
+
+  # Clipboard — SDL_SetClipboardText is a plain direct binding, but
+  # SDL_GetClipboardText's malloc'd return needs sdl_get_clipboard_text's
+  # copy-then-SDL_free shim wrapper (see shim.c) since Spinel's :str return
+  # marshalling never frees the pointer it copies from.
+  ffi_func :SDL_SetClipboardText,   [:str], :bool
+  ffi_func :sdl_get_clipboard_text, [], :str
+
+  # Text input mode — brackets IME composition / SDL_EVENT_TEXT_INPUT
+  # delivery while a text field is focused; events don't fire without this.
+  ffi_func :SDL_StartTextInput, [:ptr], :bool
+  ffi_func :SDL_StopTextInput,  [:ptr], :bool
+
+  # Shim function (see sdl/shim.c) — composed text for the current polled
+  # SDL_EVENT_TEXT_INPUT event.
+  ffi_func :sdl_text_input_text, [], :str
 
   # Windows — multi-window dispatch. SDL_GetWindowID lets a program match
   # its own Window objects against a polled event's window (see

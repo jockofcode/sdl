@@ -56,6 +56,56 @@ intptr_t sdl_render_draw_rect(SDL_Renderer *r, int x, int y, int w, int h) {
     return (intptr_t)SDL_RenderRect(r, &rect);
 }
 
+/* SDL_Rect (int-based, unlike the SDL_FRect draw calls above) clip region —
+   same construction-site problem as the rect helpers above: the pointer arg
+   can't be built directly from Ruby. Passing NULL clears clipping. */
+intptr_t sdl_set_render_clip_rect(SDL_Renderer *r, int x, int y, int w, int h) {
+    SDL_Rect rect = {x, y, w, h};
+    return (intptr_t)SDL_SetRenderClipRect(r, &rect);
+}
+
+intptr_t sdl_clear_render_clip_rect(SDL_Renderer *r) {
+    return (intptr_t)SDL_SetRenderClipRect(r, NULL);
+}
+
+/* Fills a convex polygon via a fan triangulation into SDL_RenderGeometry —
+   used for rounded corners, circles, and other non-rect shapes a UI toolkit
+   draw list needs, none of which SDL_RenderFillRect can express. `coords` is
+   a flat [x0,y0,x1,y1,...] array (Spinel's :float_array hands over a
+   `const double *`, see ffi.rb); `n` is its element count (2 * point count),
+   not the point count itself, matching the :str+strlen convention FFI.md
+   documents for array args. All vertices share one solid color, so no
+   texture/uv is involved. */
+intptr_t sdl_fill_convex_polygon(SDL_Renderer *r, const double *coords, size_t n, int red, int green, int blue, int alpha) {
+    int npoints = (int)(n / 2);
+    if (npoints < 3) return 0;
+
+    SDL_FColor color = {(float)red / 255.0f, (float)green / 255.0f, (float)blue / 255.0f, (float)alpha / 255.0f};
+    SDL_Vertex *verts = (SDL_Vertex *)SDL_malloc(sizeof(SDL_Vertex) * (size_t)npoints);
+    if (!verts) return 0;
+    for (int i = 0; i < npoints; i++) {
+        verts[i].position.x = (float)coords[i * 2];
+        verts[i].position.y = (float)coords[i * 2 + 1];
+        verts[i].color = color;
+        verts[i].tex_coord.x = 0.0f;
+        verts[i].tex_coord.y = 0.0f;
+    }
+
+    int ntris = npoints - 2;
+    int *indices = (int *)SDL_malloc(sizeof(int) * (size_t)(ntris * 3));
+    if (!indices) { SDL_free(verts); return 0; }
+    for (int i = 0; i < ntris; i++) {
+        indices[i * 3]     = 0;
+        indices[i * 3 + 1] = i + 1;
+        indices[i * 3 + 2] = i + 2;
+    }
+
+    bool ok = SDL_RenderGeometry(r, NULL, verts, npoints, indices, ntris * 3);
+    SDL_free(indices);
+    SDL_free(verts);
+    return (intptr_t)ok;
+}
+
 /* SDL_GetWindowSize takes int* out-parameters — expose each axis separately. */
 intptr_t sdl_get_window_width(SDL_Window *w) {
     int width, height;
@@ -75,6 +125,21 @@ intptr_t sdl_get_window_height(SDL_Window *w) {
 intptr_t sdl_ttf_render_text_blended(TTF_Font *font, const char *text, int r, int g, int b, int a) {
     SDL_Color fg = {(Uint8)r, (Uint8)g, (Uint8)b, (Uint8)a};
     return (intptr_t)TTF_RenderText_Blended(font, text, 0, fg);
+}
+
+/* TTF_GetStringSize's w/h are int* out-parameters — same split-into-two-
+   accessors story as the window/texture size helpers around this one.
+   length=0 means NUL-terminated, same as sdl_ttf_render_text_blended above. */
+intptr_t sdl_measure_text_width(TTF_Font *font, const char *text) {
+    int w = 0, h = 0;
+    TTF_GetStringSize(font, text, 0, &w, &h);
+    return (intptr_t)w;
+}
+
+intptr_t sdl_measure_text_height(TTF_Font *font, const char *text) {
+    int w = 0, h = 0;
+    TTF_GetStringSize(font, text, 0, &w, &h);
+    return (intptr_t)h;
 }
 
 /* SDL_GetTextureSize takes float* out-parameters, same story as the window
@@ -153,7 +218,42 @@ intptr_t sdl_event_window_id(void) {
     if (t == SDL_EVENT_PEN_DOWN || t == SDL_EVENT_PEN_UP) return (intptr_t)sdl_event.ptouch.windowID;
     if (t == SDL_EVENT_PEN_BUTTON_DOWN || t == SDL_EVENT_PEN_BUTTON_UP) return (intptr_t)sdl_event.pbutton.windowID;
     if (t == SDL_EVENT_PEN_AXIS) return (intptr_t)sdl_event.paxis.windowID;
+    if (t == SDL_EVENT_TEXT_INPUT) return (intptr_t)sdl_event.text.windowID;
+    if (t == SDL_EVENT_TEXT_EDITING) return (intptr_t)sdl_event.edit.windowID;
     return 0;
+}
+
+/* Composed text for the current polled SDL_EVENT_TEXT_INPUT event.
+   SDL_TextInputEvent.text is a `const char *` owned by the event queue
+   (unlike SDL_GetClipboardText below), so no copy/free dance is needed —
+   same ownership shape as sdl_key_sym et al., just string-typed. */
+const char *sdl_text_input_text(void) {
+    return sdl_event.text.text ? sdl_event.text.text : "";
+}
+
+/* SDL_GetClipboardText returns a freshly malloc'd buffer the caller must
+   SDL_free — but Spinel's :str return marshalling only ever copies bytes
+   out of whatever pointer we return (see sp_str_dup_external's use for
+   getenv()-style calls in spinel's own runtime), it never frees the
+   pointer afterward. So: copy into a static buffer, free SDL's buffer here
+   where we still hold it, and hand back the static buffer for Spinel to
+   copy in turn. Single-threaded, call-duration-only use (same lifetime
+   contract FFI.md documents for :str args), so the reused static buffer
+   is safe across calls. */
+static char sdl_clipboard_buf[4096];
+
+const char *sdl_get_clipboard_text(void) {
+    char *t = SDL_GetClipboardText();
+    if (t) {
+        size_t len = strlen(t);
+        if (len >= sizeof(sdl_clipboard_buf)) len = sizeof(sdl_clipboard_buf) - 1;
+        memcpy(sdl_clipboard_buf, t, len);
+        sdl_clipboard_buf[len] = '\0';
+        SDL_free(t);
+    } else {
+        sdl_clipboard_buf[0] = '\0';
+    }
+    return sdl_clipboard_buf;
 }
 
 /* Gamepad event fields — SDL_GamepadDeviceEvent/ButtonEvent/AxisEvent all

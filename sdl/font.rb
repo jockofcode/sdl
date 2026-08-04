@@ -34,5 +34,12 @@ module SDL
     def close
       LibSDL.TTF_CloseFont(@ptr)
     end
+
+    # [width, height] in pixels this text would occupy if rendered — no
+    # wrapping applied. Needed for layout: auto-sizing buttons/labels and
+    # placing a text-field caret at the right on-screen x.
+    def measure(text)
+      [LibSDL.sdl_measure_text_width(@ptr, text), LibSDL.sdl_measure_text_height(@ptr, text)]
+    end
   end
 end

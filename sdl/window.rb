@@ -29,6 +29,18 @@ module SDL
       LibSDL.SDL_GetWindowID(@ptr)
     end
 
+    # Begins IME composition / SDL_EVENT_TEXT_INPUT delivery for this
+    # window — an InputText-style widget must call this while focused (and
+    # stop_text_input when it loses focus), or text-input events never
+    # fire and typed characters can only be recovered from raw key events.
+    def start_text_input
+      LibSDL.SDL_StartTextInput(@ptr)
+    end
+
+    def stop_text_input
+      LibSDL.SDL_StopTextInput(@ptr)
+    end
+
     def close
       LibSDL.SDL_DestroyWindow(@ptr)
       Log.write("SDL_DestroyWindow: done")
