@@ -50,6 +50,7 @@ module LibSDL
   # uses is declared; add more EVENT_WINDOW_* as needed straight from
   # SDL_events.h's SDL_EventType enum (window events run 0x202-0x210+).
   ffi_const :EVENT_WINDOW_PIXEL_SIZE_CHANGED, 0x207
+  ffi_const :EVENT_WINDOW_CLOSE_REQUESTED,    0x210
 
   # Gamepad events
   ffi_const :EVENT_GAMEPAD_AXIS_MOTION,  0x650
