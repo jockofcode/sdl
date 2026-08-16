@@ -394,6 +394,19 @@ intptr_t sdl_wav_play(void *wav) {
     return (intptr_t)SDL_PutAudioStreamData(w->stream, w->buf, (int)w->len);
 }
 
+/* Silences playback without re-queuing the buffer -- unlike sdl_wav_play,
+   which always restarts. Needed by anything that keeps several Sounds
+   loaded at once and switches which one is audible (e.g. a music-track
+   player): each Sound owns its own independent stream, so playing a new
+   one never stops an old one that's still mid-playback -- without this,
+   the old track just keeps sounding, layered under the new one. */
+intptr_t sdl_wav_stop(void *wav) {
+    SdlWav *w = (SdlWav *)wav;
+    if (!w || !w->stream) return 0;
+    SDL_ClearAudioStream(w->stream);
+    return 0;
+}
+
 intptr_t sdl_wav_len(void *wav) {
     SdlWav *w = (SdlWav *)wav;
     return w ? (intptr_t)w->len : 0;

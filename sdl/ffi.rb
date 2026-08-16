@@ -330,6 +330,7 @@ module LibSDL
   ffi_func :sdl_audio_queued_ms, [], :int
   ffi_func :sdl_load_wav,        [:str], :ptr
   ffi_func :sdl_wav_play,        [:ptr], :int
+  ffi_func :sdl_wav_stop,        [:ptr], :int
   ffi_func :sdl_wav_len,         [:ptr], :int
   ffi_func :sdl_wav_free,        [:ptr], :int
 

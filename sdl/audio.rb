@@ -31,6 +31,15 @@ module SDL
       LibSDL.sdl_wav_play(@ptr)
     end
 
+    # Silences playback without restarting -- each Sound owns its own
+    # independent audio stream, so switching which of several loaded
+    # Sounds is "the current one" (e.g. a music-track player) requires
+    # explicitly stopping the old one; playing the new one never does
+    # that on its own.
+    def stop
+      LibSDL.sdl_wav_stop(@ptr)
+    end
+
     # Size in bytes of the loaded PCM buffer (0 if loading failed).
     def len
       LibSDL.sdl_wav_len(@ptr)
