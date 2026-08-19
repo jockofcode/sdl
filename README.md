@@ -241,6 +241,22 @@ sound.close
 
 `SDL_INIT_AUDIO` is included in `Screen.open`'s default init flags; no separate setup call is needed before either of these.
 
+### `SDL::Synth`
+
+A small multi-channel chip synth — independently-pitched software oscillators (waveform + ADSR envelope), mixed in C and pushed to one shared playback stream every frame. `SDL::Audio.beep`/`SDL::Sound` cover a one-shot tone or a pre-recorded file; `SDL::Synth` is for driving several simultaneous, independently-controllable voices in real time (a tracker/sequencer, a synth-driven soundtrack). Waveform math (8 shapes below, plus two filter bits) is a direct port of `pico8tools/lemmings/build_music.rb`'s `waveform_sample` (itself a port of zepto8's `synth.cpp`), not a from-scratch design.
+
+```ruby
+# waveform is one of: TRIANGLE, TILTED_SAW, SAW, SQUARE, PULSE, ORGAN, NOISE, PHASER
+SDL::Synth.note_on(channel, freq_hz, SDL::Synth::SQUARE, volume) # volume 0.0..1.0
+SDL::Synth.set_flags(channel, buzz, noiz)                        # PICO-8's waveform-reshaping bits
+SDL::Synth.set_envelope(channel, attack_ms, decay_ms, sustain_level, release_ms)
+SDL::Synth.note_off(channel)   # starts the release stage, doesn't hard-cut
+SDL::Synth.pump(ms)            # call once per frame — synthesizes+queues real audio
+SDL::Synth.queued_ms           # how much queued synth audio is still waiting to play
+```
+
+`channel` is `0...SDL::Synth::CHANNELS` (4 by default). `pump` is safe to call unconditionally every frame, even before any note has played — it's a no-op until the first `note_on` opens the stream. Note-level effects (slide, vibrato, arpeggio, fades) aren't a C-side feature: resolve them in the caller by recomputing `freq_hz`/`volume` per tick and re-issuing `note_on`, the same way a tracker's playback routine already works.
+
 ### Multi-window
 
 `SDL::Screen.open` only ever opens one `Window`/`Renderer` pair, but neither class was ever a singleton — a second independent pair is just a second `Window.new` / `Renderer.new`:
@@ -351,7 +367,7 @@ SDL3's `SDL_Event` is a C union and `SDL_FRect` is a struct — neither can be c
 
 `shim.c` also embeds sdl's bundled fonts (`sdl/fonts/*.ttf`) as compiled-in byte arrays, generated at build time by `bin2c.c` and linked in by `build_shim.sh`. `sdl_open_bundled_font` wraps them with `SDL_IOFromConstMem` + `TTF_OpenFontIO` so `SDL::Font.bundled` never touches the filesystem at runtime — see "Fonts and portability" above for why that matters.
 
-`shim.c` also carries: `sdl_event_window_id` (dispatches on event category — SDL3 has no one shared union member for it), the gamepad/touch/pen event-field accessors, `sdl_audio_beep` (synthesizes a sine wave directly in C — Spinel's FFI has no bulk-array spec shaped for raw PCM bytes) and the `sdl_wav_*` family (loads a WAV onto its own dedicated audio stream, opened at the WAV's native format), and `sdl_surface_width`/`height`. A handful of `sdl_test_push_*_event` functions at the bottom inject synthetic events via `SDL_PushEvent` purely so `test/*.rb` can exercise the touch/pen/gamepad accessors deterministically without real hardware attached — not part of the public API.
+`shim.c` also carries: `sdl_event_window_id` (dispatches on event category — SDL3 has no one shared union member for it), the gamepad/touch/pen event-field accessors, `sdl_audio_beep` (synthesizes a sine wave directly in C — Spinel's FFI has no bulk-array spec shaped for raw PCM bytes) and the `sdl_wav_*` family (loads a WAV onto its own dedicated audio stream, opened at the WAV's native format), the `sdl_synth_*` family (a small fixed bank of oscillator+envelope channels, mixed in C for the same bulk-PCM-through-FFI reason as `sdl_audio_beep` — see `SDL::Synth` above), and `sdl_surface_width`/`height`. A handful of `sdl_test_push_*_event` functions at the bottom inject synthetic events via `SDL_PushEvent` purely so `test/*.rb` can exercise the touch/pen/gamepad accessors deterministically without real hardware attached, plus `sdl_synth_test_active` (exposes a channel's envelope-active flag so `test/synth.rb` can confirm release actually reaches silence) — none of this test-support group is part of the public API.
 
 ## Examples
 
@@ -363,6 +379,7 @@ SDL3's `SDL_Event` is a C union and `SDL_FRect` is a struct — neither can be c
 | `bin/gamepad_demo.rb` | Live button/axis display + rumble on button press; handles hotplug |
 | `bin/image_demo.rb` | `SDL_image` texture loading — native/scaled/orbiting/tiled draws |
 | `bin/audio_demo.rb` | Procedural beep tones (1-5 keys) + loaded-WAV playback (space) |
+| `bin/synth_demo.rb` | Multi-channel chip synth — waveform switching (1-8), a 4-channel arpeggio (space), live envelope tweaking (up/down) |
 | `bin/multi_window_demo.rb` | Two independent windows, events routed by `SDL::Event.window_id` |
 | `bin/touch_pen_demo.rb` | Touch/pen event visualization, with a mouse fallback shape |
 
@@ -390,7 +407,7 @@ Or after building:
 spin test
 ```
 
-Snapshot tests print to stdout and diff against `.expected` files in `test/`. `test/gamepad_events.rb`, `test/touch_events.rb`, and `test/pen_events.rb` inject synthetic events via the `sdl_test_push_*_event` shim helpers (see "C shim" above) so they're deterministic without real hardware; `test/audio.rb` and `test/image.rb` exercise `SDL::Audio`/`SDL::Sound`/`SDL::Texture` against the fixtures in `sdl/assets/` (`test.wav`, `test.bmp` — both hand-built with no external tooling, see the generator scripts referenced in their header comments); `test/multi_window.rb` covers opening a second independent `Window`/`Renderer` pair.
+Snapshot tests print to stdout and diff against `.expected` files in `test/`. `test/gamepad_events.rb`, `test/touch_events.rb`, and `test/pen_events.rb` inject synthetic events via the `sdl_test_push_*_event` shim helpers (see "C shim" above) so they're deterministic without real hardware; `test/audio.rb`, `test/synth.rb`, and `test/image.rb` exercise `SDL::Audio`/`SDL::Sound`/`SDL::Synth`/`SDL::Texture` against the fixtures in `sdl/assets/` (`test.wav`, `test.bmp` — both hand-built with no external tooling, see the generator scripts referenced in their header comments); `test/multi_window.rb` covers opening a second independent `Window`/`Renderer` pair.
 
 ## License
 

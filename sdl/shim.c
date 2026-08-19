@@ -421,6 +421,314 @@ intptr_t sdl_wav_free(void *wav) {
     return 0;
 }
 
+/* ==========================================================================
+ * Chip synth: a small fixed bank of independently-pitched software
+ * oscillators (waveform + ADSR envelope), mixed in C and pushed to one
+ * shared playback stream by sdl_synth_pump(). Ruby drives it through
+ * scalar control calls only -- the same bulk-PCM-through-FFI gap
+ * sdl_audio_beep already works around (no raw byte-buffer FFI type),
+ * generalized from one fire-and-forget tone to several simultaneous,
+ * independently-controllable voices.
+ *
+ * Waveform math (all 8 shapes below, plus the buzz/noiz filter bits) is a
+ * direct port of pico8tools/lemmings/build_music.rb's `waveform_sample`
+ * (itself a port of zepto8's synth.cpp, cross-checked there against real
+ * PICO-8 WAV exports) -- not a from-scratch design. That Ruby version
+ * renders whole notes offline, sample by sample, into a WAV, driven by a
+ * pre-baked note/effect list; this port instead keeps one continuously-
+ * running phase accumulator per channel and generates `ms`-sized chunks in
+ * real time, driven by the caller's own note_on/note_off/set_envelope
+ * calls. Effect resolution (slide/vibrato/arp/fades) is intentionally left
+ * to the Ruby-side sequencer -- it recomputes freq_hz/volume per tick and
+ * re-issues note_on, rather than this being a second effects engine in C.
+ */
+#define SDL_SYNTH_SAMPLE_RATE 44100
+#define SDL_SYNTH_CHANNELS 4
+
+typedef enum {
+    SDL_SYNTH_ENV_ATTACK = 0,
+    SDL_SYNTH_ENV_DECAY,
+    SDL_SYNTH_ENV_SUSTAIN,
+    SDL_SYNTH_ENV_RELEASE,
+    SDL_SYNTH_ENV_IDLE,
+} SdlSynthEnvStage;
+
+typedef struct {
+    int active;                /* producing audio (envelope not yet idle) */
+    int waveform;                /* 0..7, see SDL::Synth's waveform constants */
+    int buzz, noiz;                /* PICO-8's two waveform-reshaping filter bits */
+    double freq_hz;
+    double volume;                 /* note_on's volume, 0..1 -- envelope multiplies this */
+    double phase;                   /* continuously increments; wrapped inside the oscillator */
+    double noise_last_advance;       /* NOISE waveform's own running state, see
+                                         build_music.rb's noise_state */
+    double noise_last_sample;
+
+    double attack_ms, decay_ms, release_ms;
+    double sustain_level;             /* 0..1, envelope level held during SUSTAIN */
+    SdlSynthEnvStage env_stage;
+    double env_elapsed_ms;
+    double env_level;                  /* current 0..1 envelope multiplier, tracked
+                                           continuously so RELEASE fades from wherever
+                                           ATTACK/DECAY actually left off */
+    double release_start_level;
+} SdlSynthChannel;
+
+static SdlSynthChannel sdl_synth_channels[SDL_SYNTH_CHANNELS];
+static SDL_AudioStream *sdl_synth_stream = NULL;
+static int sdl_synth_initialized = 0;
+
+static void sdl_synth_init_channels(void) {
+    if (sdl_synth_initialized) return;
+    sdl_synth_initialized = 1;
+    for (int i = 0; i < SDL_SYNTH_CHANNELS; i++) {
+        SdlSynthChannel *c = &sdl_synth_channels[i];
+        SDL_zerop(c);
+        c->sustain_level = 1.0; /* instant attack/decay/release by default -- a
+                                    note_on before any set_envelope call still
+                                    sounds immediately at full volume, like
+                                    sdl_audio_beep does. */
+        c->env_stage = SDL_SYNTH_ENV_IDLE;
+    }
+}
+
+intptr_t sdl_synth_note_on(int ch, double freq_hz, int waveform, double volume) {
+    sdl_synth_init_channels();
+    if (ch < 0 || ch >= SDL_SYNTH_CHANNELS) return 0;
+    SdlSynthChannel *c = &sdl_synth_channels[ch];
+    c->waveform = waveform;
+    c->freq_hz = freq_hz;
+    c->volume = volume < 0.0 ? 0.0 : (volume > 1.0 ? 1.0 : volume);
+    c->phase = 0.0;
+    c->noise_last_advance = 0.0;
+    c->noise_last_sample = 0.0;
+    c->env_stage = c->attack_ms > 0.0 ? SDL_SYNTH_ENV_ATTACK
+                 : (c->decay_ms > 0.0 ? SDL_SYNTH_ENV_DECAY : SDL_SYNTH_ENV_SUSTAIN);
+    c->env_elapsed_ms = 0.0;
+    c->env_level = c->attack_ms > 0.0 ? 0.0 : 1.0;
+    c->active = 1;
+
+    if (!sdl_synth_stream) {
+        SDL_AudioSpec spec;
+        spec.format = SDL_AUDIO_F32;
+        spec.channels = 1;
+        spec.freq = SDL_SYNTH_SAMPLE_RATE;
+        sdl_synth_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+        if (sdl_synth_stream) SDL_ResumeAudioStreamDevice(sdl_synth_stream);
+    }
+    return 1;
+}
+
+intptr_t sdl_synth_set_flags(int ch, int buzz, int noiz) {
+    sdl_synth_init_channels();
+    if (ch < 0 || ch >= SDL_SYNTH_CHANNELS) return 0;
+    sdl_synth_channels[ch].buzz = buzz;
+    sdl_synth_channels[ch].noiz = noiz;
+    return 1;
+}
+
+intptr_t sdl_synth_set_envelope(int ch, double attack_ms, double decay_ms, double sustain_level, double release_ms) {
+    sdl_synth_init_channels();
+    if (ch < 0 || ch >= SDL_SYNTH_CHANNELS) return 0;
+    SdlSynthChannel *c = &sdl_synth_channels[ch];
+    c->attack_ms = attack_ms < 0.0 ? 0.0 : attack_ms;
+    c->decay_ms = decay_ms < 0.0 ? 0.0 : decay_ms;
+    c->sustain_level = sustain_level < 0.0 ? 0.0 : (sustain_level > 1.0 ? 1.0 : sustain_level);
+    c->release_ms = release_ms < 0.0 ? 0.0 : release_ms;
+    return 1;
+}
+
+intptr_t sdl_synth_note_off(int ch) {
+    sdl_synth_init_channels();
+    if (ch < 0 || ch >= SDL_SYNTH_CHANNELS) return 0;
+    SdlSynthChannel *c = &sdl_synth_channels[ch];
+    if (!c->active || c->env_stage == SDL_SYNTH_ENV_RELEASE || c->env_stage == SDL_SYNTH_ENV_IDLE) return 0;
+    c->release_start_level = c->env_level;
+    c->env_stage = c->release_ms > 0.0 ? SDL_SYNTH_ENV_RELEASE : SDL_SYNTH_ENV_IDLE;
+    c->env_elapsed_ms = 0.0;
+    if (c->env_stage == SDL_SYNTH_ENV_IDLE) { c->active = 0; c->env_level = 0.0; }
+    return 1;
+}
+
+/* Advances channel `c`'s envelope by one sample period (dt_ms) and returns
+   the current 0..1 multiplier. RELEASE fades from release_start_level (set
+   by sdl_synth_note_off to whatever env_level ATTACK/DECAY/SUSTAIN had
+   actually reached), not always from sustain_level or full volume, so a
+   note released mid-attack fades from where it really was. */
+static double sdl_synth_advance_envelope(SdlSynthChannel *c, double dt_ms) {
+    switch (c->env_stage) {
+    case SDL_SYNTH_ENV_ATTACK:
+        c->env_elapsed_ms += dt_ms;
+        if (c->env_elapsed_ms >= c->attack_ms) {
+            c->env_level = 1.0;
+            c->env_stage = c->decay_ms > 0.0 ? SDL_SYNTH_ENV_DECAY : SDL_SYNTH_ENV_SUSTAIN;
+            c->env_elapsed_ms = 0.0;
+        } else {
+            c->env_level = c->env_elapsed_ms / c->attack_ms;
+        }
+        break;
+    case SDL_SYNTH_ENV_DECAY:
+        c->env_elapsed_ms += dt_ms;
+        if (c->env_elapsed_ms >= c->decay_ms) {
+            c->env_level = c->sustain_level;
+            c->env_stage = SDL_SYNTH_ENV_SUSTAIN;
+            c->env_elapsed_ms = 0.0;
+        } else {
+            double t = c->env_elapsed_ms / c->decay_ms;
+            c->env_level = 1.0 + (c->sustain_level - 1.0) * t;
+        }
+        break;
+    case SDL_SYNTH_ENV_SUSTAIN:
+        c->env_level = c->sustain_level;
+        break;
+    case SDL_SYNTH_ENV_RELEASE:
+        c->env_elapsed_ms += dt_ms;
+        if (c->env_elapsed_ms >= c->release_ms) {
+            c->env_level = 0.0;
+            c->env_stage = SDL_SYNTH_ENV_IDLE;
+            c->active = 0;
+        } else {
+            double t = c->env_elapsed_ms / c->release_ms;
+            c->env_level = c->release_start_level * (1.0 - t);
+        }
+        break;
+    case SDL_SYNTH_ENV_IDLE:
+    default:
+        c->env_level = 0.0;
+        break;
+    }
+    return c->env_level;
+}
+
+static double sdl_synth_wrap01(double x) {
+    double m = SDL_fmod(x, 1.0);
+    return m < 0.0 ? m + 1.0 : m;
+}
+
+/* Direct port of build_music.rb's waveform_sample -- see file header.
+   `phi` is the channel's continuously-incrementing phase (not pre-wrapped
+   by the caller); `key` is an approximate PICO-8-style pitch index derived
+   from freq_hz (only NOISE's brightness scaling uses it), via the inverse
+   of key_to_freq's `440 * 2**((key-33)/12)` mapping. */
+static double sdl_synth_waveform_sample(SdlSynthChannel *c, double phi, double key) {
+    double t = sdl_synth_wrap01(phi);
+    switch (c->waveform) {
+    case 0: { /* triangle */
+        double ret = 1.0 - SDL_fabs(4.0 * t - 2.0);
+        if (c->buzz) {
+            double a = 0.875;
+            double bret = t < a ? (2.0 * t / a - 1.0) : (2.0 * (1.0 - t) / (1.0 - a) - 1.0);
+            ret = ret * 0.75 + bret * 0.25;
+        }
+        return ret * 0.5;
+    }
+    case 1: { /* tilted saw */
+        double a = c->buzz ? 0.975 : 0.875;
+        double ret = t < a ? (2.0 * t / a - 1.0) : (2.0 * (1.0 - t) / (1.0 - a) - 1.0);
+        return ret * 0.5;
+    }
+    case 2: { /* saw */
+        double ret = t < 0.5 ? t : t - 1.0;
+        if (c->buzz) {
+            double m2 = SDL_fmod(phi, 2.0);
+            ret = ret * 0.83 - (SDL_fabs(m2 - 1.0) < 0.5 ? 0.085 : 0.0);
+        }
+        return 0.653 * ret;
+    }
+    case 3: /* square */
+        return t < (c->buzz ? 0.4 : 0.5) ? 0.25 : -0.25;
+    case 4: /* pulse */
+        return t < (c->buzz ? 0.255 : 0.316) ? 0.25 : -0.25;
+    case 5: { /* organ */
+        double ret = t < 0.5 ? (3.0 - SDL_fabs(24.0 * t - 6.0)) : (1.0 - SDL_fabs(16.0 * t - 12.0));
+        if (c->buzz) {
+            ret = t < 0.5 ? ret * 2.0 + 3.0 : ret;
+            ret = (t < 0.5 && ret > -1.875) ? ret * 0.2 - 1.0 : ret + 0.5;
+        }
+        return ret / 9.0;
+    }
+    case 6: { /* noise */
+        double tscale = 8.858923;
+        double scale = (phi - c->noise_last_advance) * tscale;
+        double new_sample = (c->noise_last_sample + scale * (SDL_randf() * 2.0 - 1.0)) / (1.0 + scale);
+        double factor = 1.0 - key / 63.0;
+        double ret = new_sample * 1.5 * (1.0 + factor * factor);
+        if (c->noiz) ret *= 2.0 * (t < 0.5 ? t : t - 1.0);
+        c->noise_last_advance = phi;
+        c->noise_last_sample = new_sample;
+        return ret;
+    }
+    case 7: { /* phaser */
+        double ret = 2.0 - SDL_fabs(8.0 * t - 4.0);
+        ret += 1.0 - SDL_fabs(4.0 * sdl_synth_wrap01(phi * 109.0 / 110.0) - 2.0);
+        return ret / 6.0;
+    }
+    default:
+        return 0.0;
+    }
+}
+
+/* Synthesizes+mixes `ms` worth of audio across every active channel and
+   queues it -- call once per frame (same cadence as renderer.present/
+   Screen.delay), matching real chip hardware/tracker playback being driven
+   by a fixed tick interrupt rather than needing sample-accurate scheduling
+   (see SDL::Synth.pump's doc comment). `ms` is clamped to 250 as a guard
+   against a single frame hitch (a GC pause, a slow frame) asking for an
+   enormous chunk all at once, which would spike playback latency and never
+   recover since every later frame keeps appending its own ~16ms on top --
+   simpler than tracking a target queue depth and sufficient for a
+   normally-paced ~16ms-per-frame caller. A no-op (returns 0) until the
+   first note_on has opened the stream, so it's always safe to call
+   unconditionally from the main loop before any note has ever played. */
+intptr_t sdl_synth_pump(int ms) {
+    sdl_synth_init_channels();
+    if (ms <= 0 || !sdl_synth_stream) return 0;
+    if (ms > 250) ms = 250;
+
+    int n = (SDL_SYNTH_SAMPLE_RATE * ms) / 1000;
+    if (n <= 0) return 0;
+
+    float *mix = (float *)SDL_calloc((size_t)n, sizeof(float));
+    if (!mix) return 0;
+
+    double dt_ms = 1000.0 / (double)SDL_SYNTH_SAMPLE_RATE;
+
+    for (int ci = 0; ci < SDL_SYNTH_CHANNELS; ci++) {
+        SdlSynthChannel *c = &sdl_synth_channels[ci];
+        if (!c->active) continue;
+        double freq = c->freq_hz > 0.0 ? c->freq_hz : 1.0;
+        double key = 33.0 + 12.0 * (SDL_log(freq / 440.0) / SDL_log(2.0));
+
+        for (int i = 0; i < n; i++) {
+            if (!c->active) break; /* envelope hit IDLE mid-buffer -- stop early */
+            double env = sdl_synth_advance_envelope(c, dt_ms);
+            c->phase += freq / (double)SDL_SYNTH_SAMPLE_RATE;
+            double s = sdl_synth_waveform_sample(c, c->phase, key);
+            mix[i] += (float)(s * c->volume * env);
+        }
+    }
+
+    for (int i = 0; i < n; i++) {
+        float v = mix[i];
+        if (v > 1.0f) v = 1.0f;
+        if (v < -1.0f) v = -1.0f;
+        mix[i] = v;
+    }
+
+    bool ok = SDL_PutAudioStreamData(sdl_synth_stream, mix, (int)(sizeof(float) * (size_t)n));
+    SDL_free(mix);
+    return (intptr_t)ok;
+}
+
+/* Milliseconds of already-queued synth audio still waiting to play (mono
+   float32 @ SDL_SYNTH_SAMPLE_RATE => 4 bytes/sample), same bookkeeping as
+   sdl_audio_queued_ms. */
+intptr_t sdl_synth_queued_ms(void) {
+    if (!sdl_synth_stream) return 0;
+    int bytes = SDL_GetAudioStreamQueued(sdl_synth_stream);
+    return (intptr_t)(((int64_t)bytes / 4) * 1000 / SDL_SYNTH_SAMPLE_RATE);
+}
+
 /* SDL_Surface's w/h fields are public (unlike Window/Renderer's opaque
    pointers) but still need a shim accessor since there's no direct
    cross-FFI struct-field read for them here. */
@@ -475,4 +783,14 @@ intptr_t sdl_test_push_gamepad_axis_event(int axis, int value) {
     e.gaxis.axis = (Uint8)axis;
     e.gaxis.value = (Sint16)value;
     return (intptr_t)SDL_PushEvent(&e);
+}
+
+/* Whether synth channel `ch` is still producing audio (envelope not yet
+   IDLE) — lets test/synth.rb deterministically confirm the ADSR state
+   machine actually reaches IDLE after enough pump() time, since nothing
+   else observable from Ruby distinguishes "released and gone silent" from
+   "still fading out". */
+intptr_t sdl_synth_test_active(int ch) {
+    if (ch < 0 || ch >= SDL_SYNTH_CHANNELS) return 0;
+    return (intptr_t)sdl_synth_channels[ch].active;
 }

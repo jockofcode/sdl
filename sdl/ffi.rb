@@ -334,6 +334,17 @@ module LibSDL
   ffi_func :sdl_wav_len,         [:ptr], :int
   ffi_func :sdl_wav_free,        [:ptr], :int
 
+  # Shim functions (see sdl/shim.c) — chip synth. A small fixed bank of
+  # independently-pitched oscillators (see SDL::Synth), driven by scalar
+  # control calls and mixed shim-side for the same reason sdl_audio_beep
+  # is (no bulk-PCM FFI type).
+  ffi_func :sdl_synth_note_on,      [:int, :double, :int, :double], :int
+  ffi_func :sdl_synth_set_flags,    [:int, :int, :int], :int
+  ffi_func :sdl_synth_set_envelope, [:int, :double, :double, :double, :double], :int
+  ffi_func :sdl_synth_note_off,     [:int], :int
+  ffi_func :sdl_synth_pump,         [:int], :int
+  ffi_func :sdl_synth_queued_ms,    [], :int
+
   # SDL_image — IMG_Load returns a Surface (format-neutral, use
   # SDL_CreateTextureFromSurface + sdl_surface_width/height below to turn
   # it into a drawable Texture); IMG_LoadTexture is the one-step shortcut
@@ -353,4 +364,5 @@ module LibSDL
   ffi_func :sdl_test_push_pen_event,   [:float, :float, :float], :int
   ffi_func :sdl_test_push_gamepad_button_event, [:int, :int], :int
   ffi_func :sdl_test_push_gamepad_axis_event,   [:int, :int], :int
+  ffi_func :sdl_synth_test_active,              [:int], :int
 end
