@@ -341,6 +341,8 @@ module LibSDL
   ffi_func :sdl_synth_note_on,      [:int, :double, :int, :double], :int
   ffi_func :sdl_synth_set_flags,    [:int, :int, :int], :int
   ffi_func :sdl_synth_set_envelope, [:int, :double, :double, :double, :double], :int
+  ffi_func :sdl_synth_set_freq,     [:int, :double], :int
+  ffi_func :sdl_synth_set_volume,   [:int, :double], :int
   ffi_func :sdl_synth_note_off,     [:int], :int
   ffi_func :sdl_synth_pump,         [:int], :int
   ffi_func :sdl_synth_queued_ms,    [], :int

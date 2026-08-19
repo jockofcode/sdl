@@ -46,4 +46,21 @@ SDL::Screen.open("Synth Test", width: 320, height: 240) do |window, renderer|
   end
   SDL::Synth.pump(20)
   puts SDL::Synth.queued_ms > before
+
+  # set_freq/set_volume update a live channel without resetting its
+  # active/envelope state (unlike note_on) -- confirmed by test_active
+  # staying true across both calls, not just the calls themselves
+  # succeeding.
+  SDL::Synth.note_on(2, 440.0, SDL::Synth::SAW, 0.0)
+  puts SDL::Synth.set_freq(2, 880.0) != 0
+  puts LibSDL.sdl_synth_test_active(2) != 0
+  puts SDL::Synth.set_volume(2, 0.3) != 0
+  puts LibSDL.sdl_synth_test_active(2) != 0
+
+  # Both are no-ops (return 0) on a channel that's gone IDLE.
+  SDL::Synth.note_off(2)
+  SDL::Synth.pump(200)
+  puts LibSDL.sdl_synth_test_active(2) == 0
+  puts SDL::Synth.set_freq(2, 220.0) == 0
+  puts SDL::Synth.set_volume(2, 0.5) == 0
 end

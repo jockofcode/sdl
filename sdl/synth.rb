@@ -52,6 +52,22 @@ module SDL
       LibSDL.sdl_synth_note_off(ch)
     end
 
+    # Updates channel `ch`'s frequency/volume in place, WITHOUT resetting
+    # phase/envelope/active state the way note_on does — for driving a
+    # pitch/volume effect (slide/portamento, vibrato, tremolo, fade) by
+    # recomputing the resolved value every tick and pushing it here,
+    # rather than retriggering note_on every tick (which would restart the
+    # envelope and reset phase, audible as a stutter/click instead of a
+    # smooth glide). A no-op (returns 0) on a channel that isn't currently
+    # active (never note_on'd, or already past its envelope's release).
+    def self.set_freq(ch, freq_hz)
+      LibSDL.sdl_synth_set_freq(ch, freq_hz.to_f)
+    end
+
+    def self.set_volume(ch, volume)
+      LibSDL.sdl_synth_set_volume(ch, volume.to_f)
+    end
+
     # Synthesizes+mixes `ms` worth of audio for every active channel and
     # queues it. Call this once per frame from the main loop (same cadence
     # as renderer.present/Screen.delay) — safe to call unconditionally even

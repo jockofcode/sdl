@@ -519,6 +519,32 @@ intptr_t sdl_synth_note_on(int ch, double freq_hz, int waveform, double volume) 
     return 1;
 }
 
+/* Updates channel `ch`'s frequency/volume in place -- unlike note_on,
+   does NOT reset phase/envelope/active state, so a currently-sounding
+   note keeps its envelope stage and phase continuity. For a caller
+   driving pitch/volume effects (portamento/slide, vibrato, tremolo/fade)
+   by recomputing the resolved value every tick and pushing it here,
+   rather than retriggering note_on every tick (which would restart the
+   envelope and reset phase, audible as a stutter/click each tick instead
+   of a smooth glide). A no-op on a channel that isn't currently active
+   (never note_on'd, or already past its envelope's release) -- same
+   "safe to call unconditionally" contract as pump(). */
+intptr_t sdl_synth_set_freq(int ch, double freq_hz) {
+    if (ch < 0 || ch >= SDL_SYNTH_CHANNELS) return 0;
+    SdlSynthChannel *c = &sdl_synth_channels[ch];
+    if (!c->active) return 0;
+    c->freq_hz = freq_hz;
+    return 1;
+}
+
+intptr_t sdl_synth_set_volume(int ch, double volume) {
+    if (ch < 0 || ch >= SDL_SYNTH_CHANNELS) return 0;
+    SdlSynthChannel *c = &sdl_synth_channels[ch];
+    if (!c->active) return 0;
+    c->volume = volume < 0.0 ? 0.0 : (volume > 1.0 ? 1.0 : volume);
+    return 1;
+}
+
 intptr_t sdl_synth_set_flags(int ch, int buzz, int noiz) {
     sdl_synth_init_channels();
     if (ch < 0 || ch >= SDL_SYNTH_CHANNELS) return 0;
