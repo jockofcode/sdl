@@ -34,7 +34,12 @@ git init -q
 git remote add origin https://github.com/libsdl-org/SDL_image.git
 git fetch --depth 1 origin main
 git checkout -q FETCH_HEAD
-git submodule update --init --recursive --depth 1
+# Only the submodules PNG/JPEG actually need -- `--recursive` here would
+# also pull aom/dav1d/libavif/libwebp/libtiff/libjxl (and libjxl's own
+# large nested submodule tree: testdata/brotli/googletest/highway/lcms/
+# skcms/zlib) despite those codecs being off below, adding many minutes
+# to every rebuild for nothing this build ever links.
+git submodule update --init --depth 1 external/libpng external/jpeg external/zlib
 cd ..
 
 cmake -S src -B build \
@@ -57,7 +62,23 @@ cmake --install build
 
 # Merge libSDL3_image.a plus every vendored static dep (libpng/zlib/libjpeg,
 # whatever their exact target names are) into one archive, so spin.toml
-# doesn't need to name each one.
-ALL_ARCHIVES=$(find build -name '*.a' -type f)
-libtool -static -o libSDL3_image_bundle.a $ALL_ARCHIVES
+# doesn't need to name each one. Done via `ar` (extract each archive's
+# objects into its own scratch subdir, so same-named objects from different
+# archives -- e.g. two "options.c.o" -- don't collide, then re-archive them
+# all together) rather than macOS's `libtool -static`: that command is
+# Apple's cctools libtool and doesn't exist on Linux (GNU libtool is a
+# different tool with different flags), while `ar`/`ranlib` are the same
+# command on both.
+ALL_ARCHIVES=$(find "$(pwd)/build" -name '*.a' -type f)
+rm -rf merge
+mkdir merge
+i=0
+for a in $ALL_ARCHIVES; do
+  d="merge/$i"
+  mkdir -p "$d"
+  (cd "$d" && ar x "$a")
+  i=$((i + 1))
+done
+ar rcs libSDL3_image_bundle.a merge/*/*.o
+ranlib libSDL3_image_bundle.a
 tar -cf sdl3image-headers.tar -C install/include .
