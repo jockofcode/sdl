@@ -13,17 +13,21 @@
 # used to reference directly by absolute Xcode path, plus one more,
 # system_libs.ld -- regardless of which OS that host is. Each name gets
 # its REAL content only when it matches the current host; every other name
-# gets a harmless placeholder: a zero-member static archive, which every
-# linker (ld64 or GNU ld) accepts and silently contributes nothing for.
-# That lets spin.toml's [native] libs reference all 21 names unconditionally
-# on macOS or Linux alike, with a manifest format that has no idea platforms
-# exist.
+# gets a harmless placeholder: a static archive holding one empty object
+# file (no symbols), which every linker (ld64 or GNU ld) accepts and
+# silently contributes nothing for. That lets spin.toml's [native] libs
+# reference all 21 names unconditionally on macOS or Linux alike, with a
+# manifest format that has no idea platforms exist.
 set -e
 
 SDL3_TAR="$1"
 
-ar rcs empty.a   # zero-member archive: the portable "not needed on this
-                 # platform" stand-in a linker just ignores.
+# A *zero*-member archive (`ar rcs empty.a` with no file operands) is what
+# GNU ar (Linux) accepts, but Apple's ar refuses it ("no archive members
+# specified") -- it insists on at least one member. So the member is an
+# empty, symbol-less object file instead: archiving that satisfies both.
+cc -c -x c /dev/null -o empty.o
+ar rcs empty.a empty.o
 
 MAC_FRAMEWORKS="CoreText CoreGraphics CoreFoundation CoreMedia CoreVideo Cocoa UniformTypeIdentifiers IOKit ForceFeedback Carbon CoreAudio AudioToolbox AVFoundation Foundation GameController Metal QuartzCore CoreHaptics"
 MAC_LIBS="libobjc libpthread"
