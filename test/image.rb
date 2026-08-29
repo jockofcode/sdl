@@ -14,6 +14,13 @@ SDL::Screen.open("Image Test", width: 320, height: 240) do |window, renderer|
   puts texture != nil
   puts texture.width
   puts texture.height
+
+  # Texture tinting (SDL_SetTextureColorMod/AlphaMod) — multiplies the
+  # texture's pixels by these values at draw time; both return whether SDL
+  # accepted the call.
+  puts texture.set_color_mod(128, 64, 255)
+  puts texture.set_alpha_mod(200)
+
   texture.close
 
   surface = LibSDL.IMG_Load(bmp_path)

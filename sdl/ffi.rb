@@ -213,6 +213,13 @@ module LibSDL
   ffi_func :SDL_DestroySurface,           [:ptr],       :void
   ffi_func :SDL_DestroyTexture,           [:ptr],       :void
 
+  # Texture tinting — SDL_SetTextureColorMod multiplies each pixel's RGB by
+  # (r,g,b)/255 at draw time (SDL_SetTextureAlphaMod likewise for alpha),
+  # letting one grayscale/white sprite be recolored per draw call instead of
+  # needing a separate texture file per color variant.
+  ffi_func :SDL_SetTextureColorMod, [:ptr, :uint8, :uint8, :uint8], :bool
+  ffi_func :SDL_SetTextureAlphaMod, [:ptr, :uint8], :bool
+
   # Shim functions (see sdl/shim.c) — event access and rect helpers
   ffi_func :sdl_poll_event,      [], :int
   ffi_func :sdl_event_type,      [], :int

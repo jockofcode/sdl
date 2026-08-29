@@ -26,6 +26,20 @@ module SDL
       LibSDL.sdl_get_texture_height(@ptr)
     end
 
+    # Multiplies this texture's pixels by (r, g, b) at draw time — lets one
+    # grayscale/white sprite be recolored per draw instead of needing a
+    # separate texture file per color variant. Returns whether SDL accepted
+    # the call.
+    def set_color_mod(r, g, b)
+      LibSDL.SDL_SetTextureColorMod(@ptr, r, g, b)
+    end
+
+    # Multiplies this texture's alpha by a/255 at draw time. Returns whether
+    # SDL accepted the call.
+    def set_alpha_mod(a)
+      LibSDL.SDL_SetTextureAlphaMod(@ptr, a)
+    end
+
     def close
       LibSDL.SDL_DestroyTexture(@ptr)
       Log.write("SDL_DestroyTexture: done")

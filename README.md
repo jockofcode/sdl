@@ -200,6 +200,8 @@ renderer.draw_texture(texture, x, y, w: 128, h: 128) # scaled
 
 texture.width
 texture.height
+texture.set_color_mod(255, 128, 64)  # tint this texture's pixels (0..255 each)
+texture.set_alpha_mod(200)           # scale this texture's alpha (0..255)
 texture.close
 ```
 
