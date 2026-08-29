@@ -56,24 +56,28 @@ workdir   = "sdl"
 command   = "sh build_shim.sh ${build.out}/sdl3-install.tar ${build.out}/sdl3ttf-headers.tar ${build.out}/sdl3image-headers.tar"
 artifacts = ["libsdl_shim.a"]
 
-# The system frameworks SDL3/SDL3_ttf need, in place of their own dylib load
-# commands (a static .a carries no load-command metadata, unlike a dylib).
-# Framework/libobjc/libpthread entries point at the SDK's .tbd stubs since
-# the real dylibs no longer live on disk under /System or /usr/lib (they
-# ship only in the dyld shared cache) — .tbd files are real files on disk
-# that `cc`/`ld` link against exactly like the framework binary itself.
-# These paths live under Xcode's install location, not a per-user one, so
-# they're the same on every Mac with Xcode installed at its default
-# location — not a "hardcoded machine path" in the sense the other entries
-# in this file used to be. Full SDL3 framework list came from
-# sdl3.pc's Libs line (SDL3 has no sdl3-config — CMake doesn't generate
-# that autotools-style script) from an earlier prebuilt install; the extra
-# CoreText/CoreGraphics/CoreFoundation entries came from sdl3-ttf.pc's
-# Libs.private line likewise.
+# Entry 5: the system libraries SDL3/SDL3_ttf need in place of their own
+# dylib/.so load commands (a static .a carries no load-command metadata).
+# spin.toml has no per-platform conditional, and every [[build]] entry runs
+# unconditionally on whichever host is doing the build -- so this ALWAYS
+# runs, on macOS or Linux alike, and always produces the full artifact list
+# below; sdl/native/system_libs/build.sh fills in the real content only for
+# whichever names match the current host (via `uname`) and a harmless
+# empty-archive placeholder for the rest, which every linker just ignores.
+# See that script for the full explanation, and how the macOS framework
+# list and the Linux system-lib list (system_libs.ld) were each derived.
+[[build]]
+workdir   = "sdl/native/system_libs"
+command   = "sh build.sh ${build.out}/sdl3-install.tar"
+artifacts = ["CoreText.tbd", "CoreGraphics.tbd", "CoreFoundation.tbd", "libobjc.tbd", "libpthread.tbd", "CoreMedia.tbd", "CoreVideo.tbd", "Cocoa.tbd", "UniformTypeIdentifiers.tbd", "IOKit.tbd", "ForceFeedback.tbd", "Carbon.tbd", "CoreAudio.tbd", "AudioToolbox.tbd", "AVFoundation.tbd", "Foundation.tbd", "GameController.tbd", "Metal.tbd", "QuartzCore.tbd", "CoreHaptics.tbd", "system_libs.ld"]
+
 [native]
 # spin's TOML reader parses line-by-line and has no array continuation, so
-# this must stay a single line despite the length.
-libs = ["${build.out}/libsdl_shim.a", "${build.out}/libSDL3_ttf.a", "${build.out}/libharfbuzz.a", "${build.out}/libfreetype.a", "${build.out}/libSDL3_image_bundle.a", "${build.out}/libSDL3.a", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreText.framework/CoreText.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libobjc.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libpthread.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreMedia.framework/CoreMedia.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreVideo.framework/CoreVideo.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Cocoa.framework/Cocoa.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/UniformTypeIdentifiers.framework/UniformTypeIdentifiers.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/IOKit.framework/IOKit.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/ForceFeedback.framework/ForceFeedback.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Carbon.framework/Carbon.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreAudio.framework/CoreAudio.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/AVFoundation.framework/AVFoundation.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Foundation.framework/Foundation.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/GameController.framework/GameController.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Metal.framework/Metal.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/QuartzCore.framework/QuartzCore.tbd", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreHaptics.framework/CoreHaptics.tbd"]
+# this must stay a single line despite the length. Every ${build.out}/*.tbd
+# entry below is entry 5's output (real Xcode framework stub on macOS,
+# harmless placeholder on Linux); system_libs.ld is the reverse (real GNU-ld
+# script bundling X11/audio/etc on Linux, harmless placeholder on macOS).
+libs = ["${build.out}/libsdl_shim.a", "${build.out}/libSDL3_ttf.a", "${build.out}/libharfbuzz.a", "${build.out}/libfreetype.a", "${build.out}/libSDL3_image_bundle.a", "${build.out}/libSDL3.a", "${build.out}/CoreText.tbd", "${build.out}/CoreGraphics.tbd", "${build.out}/CoreFoundation.tbd", "${build.out}/libobjc.tbd", "${build.out}/libpthread.tbd", "${build.out}/CoreMedia.tbd", "${build.out}/CoreVideo.tbd", "${build.out}/Cocoa.tbd", "${build.out}/UniformTypeIdentifiers.tbd", "${build.out}/IOKit.tbd", "${build.out}/ForceFeedback.tbd", "${build.out}/Carbon.tbd", "${build.out}/CoreAudio.tbd", "${build.out}/AudioToolbox.tbd", "${build.out}/AVFoundation.tbd", "${build.out}/Foundation.tbd", "${build.out}/GameController.tbd", "${build.out}/Metal.tbd", "${build.out}/QuartzCore.tbd", "${build.out}/CoreHaptics.tbd", "${build.out}/system_libs.ld"]
 
 [dependencies]
 public_sans = { git = "https://github.com/uswds/public-sans" }
