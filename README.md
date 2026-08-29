@@ -197,6 +197,12 @@ texture = SDL::Texture.load(renderer, "/absolute/path/to/image.png")
 
 renderer.draw_texture(texture, x, y)               # native pixel size
 renderer.draw_texture(texture, x, y, w: 128, h: 128) # scaled
+renderer.draw_texture(texture, x, y, src: [0, 0, 32, 32]) # crop to a source rect (e.g. one sprite-sheet frame)
+renderer.draw_texture(texture, x, y, angle: 45, flip: :horizontal) # rotate/flip about the dst rect's center
+renderer.draw_texture(texture, x, y, angle: 45, center: [0, 0])    # ...or an explicit pivot point
+
+renderer.fill_polygon_textured(points, uvs, texture) # texture-mapped convex polygon/quad (points/uvs are
+                                                       # flat [x0,y0,x1,y1,...]/[u0,v0,u1,v1,...] arrays)
 
 texture.width
 texture.height

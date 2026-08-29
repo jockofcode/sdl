@@ -106,6 +106,44 @@ intptr_t sdl_fill_convex_polygon(SDL_Renderer *r, const double *coords, size_t n
     return (intptr_t)ok;
 }
 
+/* Same fan-triangulation as sdl_fill_convex_polygon above, but each vertex
+   carries a texture UV instead of a solid color, and `t` is passed to
+   SDL_RenderGeometry instead of NULL — that's what makes this a *textured*
+   polygon fill (arbitrary quads/fans mapped with a texture, which plain
+   draw_texture's axis-aligned dst rect can't express). `uvs` is a second
+   flat [u0,v0,u1,v1,...] array, same point count as `coords`, in normalized
+   0..1 texture space. Vertex color is left opaque white so the texture's
+   own pixels come through unmodified. */
+intptr_t sdl_fill_convex_polygon_textured(SDL_Renderer *r, SDL_Texture *t, const double *coords, const double *uvs, size_t n) {
+    int npoints = (int)(n / 2);
+    if (npoints < 3) return 0;
+
+    SDL_FColor white = {1.0f, 1.0f, 1.0f, 1.0f};
+    SDL_Vertex *verts = (SDL_Vertex *)SDL_malloc(sizeof(SDL_Vertex) * (size_t)npoints);
+    if (!verts) return 0;
+    for (int i = 0; i < npoints; i++) {
+        verts[i].position.x = (float)coords[i * 2];
+        verts[i].position.y = (float)coords[i * 2 + 1];
+        verts[i].color = white;
+        verts[i].tex_coord.x = (float)uvs[i * 2];
+        verts[i].tex_coord.y = (float)uvs[i * 2 + 1];
+    }
+
+    int ntris = npoints - 2;
+    int *indices = (int *)SDL_malloc(sizeof(int) * (size_t)(ntris * 3));
+    if (!indices) { SDL_free(verts); return 0; }
+    for (int i = 0; i < ntris; i++) {
+        indices[i * 3]     = 0;
+        indices[i * 3 + 1] = i + 1;
+        indices[i * 3 + 2] = i + 2;
+    }
+
+    bool ok = SDL_RenderGeometry(r, t, verts, npoints, indices, ntris * 3);
+    SDL_free(indices);
+    SDL_free(verts);
+    return (intptr_t)ok;
+}
+
 /* SDL_GetWindowSize takes int* out-parameters — expose each axis separately. */
 intptr_t sdl_get_window_width(SDL_Window *w) {
     int width, height;
@@ -162,6 +200,27 @@ intptr_t sdl_get_texture_height(SDL_Texture *t) {
 intptr_t sdl_render_texture(SDL_Renderer *r, SDL_Texture *t, int x, int y, int w, int h) {
     SDL_FRect dst = {(float)x, (float)y, (float)w, (float)h};
     return (intptr_t)SDL_RenderTexture(r, t, NULL, &dst);
+}
+
+/* SDL_RenderTextureRotated's srcrect/dst/center args are FRect/FRect/FPoint
+   pointers — same construction-site problem as sdl_render_texture, plus
+   src and center are each independently optional in SDL's own API (NULL
+   srcrect means "whole texture"; NULL center means "rotate about the dst
+   rect's own center"). A 0-sized rect isn't a safe stand-in for "unset"
+   (a caller could legitimately want a 0-width src slice), so has_src/
+   has_center flags pick NULL vs a real pointer explicitly. angle is
+   degrees, clockwise, matching SDL; flip is an SDL_FlipMode value
+   (0=none, 1=horizontal, 2=vertical). */
+intptr_t sdl_render_texture_rotated(SDL_Renderer *r, SDL_Texture *t,
+        int has_src, int sx, int sy, int sw, int sh,
+        int x, int y, int w, int h,
+        double angle, int has_center, int cx, int cy, int flip) {
+    SDL_FRect src = {(float)sx, (float)sy, (float)sw, (float)sh};
+    SDL_FRect dst = {(float)x, (float)y, (float)w, (float)h};
+    SDL_FPoint center = {(float)cx, (float)cy};
+    return (intptr_t)SDL_RenderTextureRotated(r, t,
+        has_src ? &src : NULL, &dst, angle,
+        has_center ? &center : NULL, (SDL_FlipMode)flip);
 }
 
 /* Bundled fonts, compiled in as byte arrays by build_shim.sh (see

@@ -247,11 +247,26 @@ module LibSDL
   ffi_func :sdl_clear_render_clip_rect, [:ptr], :int
   ffi_func :sdl_fill_convex_polygon, [:ptr, :float_array, :size_t, :int, :int, :int, :int], :int
 
+  # sdl_fill_convex_polygon_textured — same fan-triangulated
+  # SDL_RenderGeometry call as sdl_fill_convex_polygon above, but mapped
+  # with a texture instead of a solid color: `uvs` is a second flat
+  # [u0,v0,u1,v1,...] array (normalized 0..1 texture coords), same point
+  # count as `coords`.
+  ffi_func :sdl_fill_convex_polygon_textured, [:ptr, :ptr, :float_array, :float_array, :size_t], :int
+
   # Shim functions (see sdl/shim.c) — text rendering
   ffi_func :sdl_ttf_render_text_blended, [:ptr, :str, :int, :int, :int, :int], :ptr
   ffi_func :sdl_get_texture_width,  [:ptr], :int
   ffi_func :sdl_get_texture_height, [:ptr], :int
   ffi_func :sdl_render_texture, [:ptr, :ptr, :int, :int, :int, :int], :int
+
+  # sdl_render_texture_rotated — SDL_RenderTextureRotated with an optional
+  # source rect, rotation angle (degrees, clockwise), optional pivot
+  # point, and flip mode. has_src/has_center pick NULL vs a real
+  # rect/point on the C side (see shim.c) since 0 isn't a safe "unset"
+  # sentinel for either.
+  ffi_func :sdl_render_texture_rotated,
+    [:ptr, :ptr, :int, :int, :int, :int, :int, :int, :int, :int, :int, :double, :int, :int, :int, :int], :int
 
   # Shim functions (see sdl/shim.c) — text measurement, needed for layout
   # (button auto-sizing, text wrapping, caret placement in input fields).
