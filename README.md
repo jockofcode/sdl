@@ -231,6 +231,34 @@ pad.close
 
 Handle `LibSDL::EVENT_GAMEPAD_ADDED` / `EVENT_GAMEPAD_REMOVED` from `SDL::Event.poll` to react to hotplug; `EVENT_GAMEPAD_BUTTON_DOWN` / `_UP` / `EVENT_GAMEPAD_AXIS_MOTION` carry `SDL::Event.gamepad_which` / `gamepad_button` / `gamepad_button_down?` / `gamepad_axis` / `gamepad_axis_value`.
 
+### `SDL::Controls`
+
+Named arcade controls merged from the keyboard and one gamepad, so a game asks "is fire held?" instead of matching keysyms and button ids. Actions are `:left :right :up :down :fire :alt :start :back :pause`. Defaults — keyboard: arrows / WASD, Space, X / Z / Shift, Enter, Esc, P; gamepad: d-pad and left stick, South (A), East or West (B / X), Start, Back, Guide.
+
+```ruby
+controls = SDL::Controls.new             # player: 0 opens gamepad 0 if present; hotplug handled
+controls.bind_key(:fire, LibSDL::K_UP)   # add bindings on top of the defaults
+controls.clear_keys(:back)               # or drop them (clear_buttons likewise)
+
+loop do
+  controls.begin_frame                   # clears the pressed?/released? edges
+  while (event_type = SDL::Event.poll)
+    controls.handle(event_type)          # true if it mapped to an action; the game still sees every event
+  end
+  controls.held?(:fire)                  # level: any bound key / button down, or the stick past its deadzone
+  controls.pressed?(:fire)               # edge: went down this frame (keys repeat with the OS; pad directions auto-repeat after 320 ms)
+  controls.released?(:fire)
+  controls.dir_x / controls.dir_y        # -1, 0, 1 — right and down are positive
+  controls.axis_x / controls.axis_y      # -1.0..1.0, proportional for the stick (deadzone removed), full for keys / d-pad
+  controls.stick_x / controls.stick_y    # raw stick, -1.0..1.0
+  controls.gamepad? / controls.gamepad_name
+  controls.rumble(0.5, 120)              # strength 0..1, ms — no-op without a pad
+end
+controls.close
+```
+
+`Controls.new(gamepad: false)` skips opening a pad and then accepts events from any pad id (what `test/controls.rb` relies on); `repeat: false` turns off the direction auto-repeat. Two-player games make one instance per `player:` index. A game that also wants raw access keeps using `SDL::Gamepad` / `SDL::Event` alongside.
+
 ### `SDL::Audio` and `SDL::Sound`
 
 ```ruby
@@ -375,7 +403,7 @@ SDL3's `SDL_Event` is a C union and `SDL_FRect` is a struct — neither can be c
 
 `shim.c` also embeds sdl's bundled fonts (`sdl/fonts/*.ttf`) as compiled-in byte arrays, generated at build time by `bin2c.c` and linked in by `build_shim.sh`. `sdl_open_bundled_font` wraps them with `SDL_IOFromConstMem` + `TTF_OpenFontIO` so `SDL::Font.bundled` never touches the filesystem at runtime — see "Fonts and portability" above for why that matters.
 
-`shim.c` also carries: `sdl_event_window_id` (dispatches on event category — SDL3 has no one shared union member for it), the gamepad/touch/pen event-field accessors, `sdl_audio_beep` (synthesizes a sine wave directly in C — Spinel's FFI has no bulk-array spec shaped for raw PCM bytes) and the `sdl_wav_*` family (loads a WAV onto its own dedicated audio stream, opened at the WAV's native format), the `sdl_synth_*` family (a small fixed bank of oscillator+envelope channels, mixed in C for the same bulk-PCM-through-FFI reason as `sdl_audio_beep` — see `SDL::Synth` above), and `sdl_surface_width`/`height`. A handful of `sdl_test_push_*_event` functions at the bottom inject synthetic events via `SDL_PushEvent` purely so `test/*.rb` can exercise the touch/pen/gamepad accessors deterministically without real hardware attached, plus `sdl_synth_test_active` (exposes a channel's envelope-active flag so `test/synth.rb` can confirm release actually reaches silence) — none of this test-support group is part of the public API.
+`shim.c` also carries: `sdl_event_window_id` (dispatches on event category — SDL3 has no one shared union member for it), the gamepad/touch/pen event-field accessors, `sdl_audio_beep` (synthesizes a sine wave directly in C — Spinel's FFI has no bulk-array spec shaped for raw PCM bytes) and the `sdl_wav_*` family (loads a WAV onto its own dedicated audio stream, opened at the WAV's native format), the `sdl_synth_*` family (a small fixed bank of oscillator+envelope channels, mixed in C for the same bulk-PCM-through-FFI reason as `sdl_audio_beep` — see `SDL::Synth` above), and `sdl_surface_width`/`height`. A handful of `sdl_test_push_*_event` functions at the bottom inject synthetic events via `SDL_PushEvent` purely so `test/*.rb` can exercise the touch/pen/gamepad/key accessors and `SDL::Controls` deterministically without real hardware attached, plus `sdl_synth_test_active` (exposes a channel's envelope-active flag so `test/synth.rb` can confirm release actually reaches silence) — none of this test-support group is part of the public API.
 
 ## Examples
 
@@ -415,7 +443,7 @@ Or after building:
 spin test
 ```
 
-Snapshot tests print to stdout and diff against `.expected` files in `test/`. `test/gamepad_events.rb`, `test/touch_events.rb`, and `test/pen_events.rb` inject synthetic events via the `sdl_test_push_*_event` shim helpers (see "C shim" above) so they're deterministic without real hardware; `test/audio.rb`, `test/synth.rb`, and `test/image.rb` exercise `SDL::Audio`/`SDL::Sound`/`SDL::Synth`/`SDL::Texture` against the fixtures in `sdl/assets/` (`test.wav`, `test.bmp` — both hand-built with no external tooling, see the generator scripts referenced in their header comments); `test/multi_window.rb` covers opening a second independent `Window`/`Renderer` pair.
+Snapshot tests print to stdout and diff against `.expected` files in `test/`. `test/gamepad_events.rb`, `test/touch_events.rb`, `test/pen_events.rb`, and `test/controls.rb` inject synthetic events via the `sdl_test_push_*_event` shim helpers (see "C shim" above) so they're deterministic without real hardware; `test/audio.rb`, `test/synth.rb`, and `test/image.rb` exercise `SDL::Audio`/`SDL::Sound`/`SDL::Synth`/`SDL::Texture` against the fixtures in `sdl/assets/` (`test.wav`, `test.bmp` — both hand-built with no external tooling, see the generator scripts referenced in their header comments); `test/multi_window.rb` covers opening a second independent `Window`/`Renderer` pair.
 
 ## License
 

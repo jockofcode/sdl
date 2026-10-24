@@ -1,6 +1,6 @@
 module SDL
   class Gamepad
-    attr_reader :ptr
+    attr_reader :ptr, :id
 
     # Number of gamepads currently connected (SDL_GetGamepads' count).
     def self.count
@@ -17,6 +17,7 @@ module SDL
     end
 
     def initialize(instance_id)
+      @id = instance_id
       @ptr = LibSDL.SDL_OpenGamepad(instance_id)
       Log.write("SDL_OpenGamepad(#{instance_id}): #{@ptr == nil ? "NULL — #{LibSDL.SDL_GetError}" : "ok"}")
     end

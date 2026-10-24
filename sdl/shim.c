@@ -870,6 +870,16 @@ intptr_t sdl_test_push_gamepad_axis_event(int axis, int value) {
     return (intptr_t)SDL_PushEvent(&e);
 }
 
+intptr_t sdl_test_push_key_event(int key, int down) {
+    SDL_Event e;
+    SDL_zero(e);
+    e.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+    e.key.key = (SDL_Keycode)key;
+    e.key.down = down ? true : false;
+    e.key.repeat = false;
+    return (intptr_t)SDL_PushEvent(&e);
+}
+
 /* Whether synth channel `ch` is still producing audio (envelope not yet
    IDLE) — lets test/synth.rb deterministically confirm the ADSR state
    machine actually reaches IDLE after enough pump() time, since nothing

@@ -383,10 +383,11 @@ module LibSDL
   # Shim functions (see sdl/shim.c) — test-support synthetic event
   # injection (SDL_PushEvent-backed). Not part of the public binding
   # surface; used only by test/*.rb to exercise the touch/pen/gamepad
-  # event-field accessors above without real hardware.
+  # event-field accessors above (and SDL::Controls) without real hardware.
   ffi_func :sdl_test_push_touch_event, [:float, :float, :float, :float, :float], :int
   ffi_func :sdl_test_push_pen_event,   [:float, :float, :float], :int
   ffi_func :sdl_test_push_gamepad_button_event, [:int, :int], :int
   ffi_func :sdl_test_push_gamepad_axis_event,   [:int, :int], :int
+  ffi_func :sdl_test_push_key_event,            [:int, :int], :int
   ffi_func :sdl_synth_test_active,              [:int], :int
 end
