@@ -880,6 +880,25 @@ intptr_t sdl_test_push_key_event(int key, int down) {
     return (intptr_t)SDL_PushEvent(&e);
 }
 
+/* kind: 0 = motion, 1 = left button down, 2 = left button up. */
+intptr_t sdl_test_push_mouse_event(int kind, float x, float y) {
+    SDL_Event e;
+    SDL_zero(e);
+    if (kind == 0) {
+        e.type = SDL_EVENT_MOUSE_MOTION;
+        e.motion.x = x;
+        e.motion.y = y;
+    } else {
+        e.type = kind == 1 ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+        e.button.button = SDL_BUTTON_LEFT;
+        e.button.down = kind == 1 ? true : false;
+        e.button.clicks = 1;
+        e.button.x = x;
+        e.button.y = y;
+    }
+    return (intptr_t)SDL_PushEvent(&e);
+}
+
 /* Whether synth channel `ch` is still producing audio (envelope not yet
    IDLE) — lets test/synth.rb deterministically confirm the ADSR state
    machine actually reaches IDLE after enough pump() time, since nothing

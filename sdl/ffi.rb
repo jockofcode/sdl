@@ -268,6 +268,16 @@ module LibSDL
   ffi_func :sdl_render_texture_rotated,
     [:ptr, :ptr, :int, :int, :int, :int, :int, :int, :int, :int, :int, :double, :int, :int, :int, :int], :int
 
+  # Draw blend mode (SDL_BlendMode) — SDL::Renderer#blend_mode= and the
+  # overlay SDL::PauseMenu draws.
+  ffi_const :BLENDMODE_NONE,  0x00000000
+  ffi_const :BLENDMODE_BLEND, 0x00000001
+  ffi_const :BLENDMODE_ADD,   0x00000002
+  ffi_const :BLENDMODE_MOD,   0x00000004
+  ffi_const :BLENDMODE_MUL,   0x00000008
+  ffi_func :SDL_SetRenderDrawBlendMode, [:ptr, :uint32], :bool
+  ffi_func :SDL_GetRenderDrawBlendMode, [:ptr, :ptr], :bool
+
   # Shim functions (see sdl/shim.c) — text measurement, needed for layout
   # (button auto-sizing, text wrapping, caret placement in input fields).
   ffi_func :sdl_measure_text_width,  [:ptr, :str], :int
@@ -389,5 +399,6 @@ module LibSDL
   ffi_func :sdl_test_push_gamepad_button_event, [:int, :int], :int
   ffi_func :sdl_test_push_gamepad_axis_event,   [:int, :int], :int
   ffi_func :sdl_test_push_key_event,            [:int, :int], :int
+  ffi_func :sdl_test_push_mouse_event,          [:int, :float, :float], :int
   ffi_func :sdl_synth_test_active,              [:int], :int
 end

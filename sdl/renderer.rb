@@ -18,6 +18,17 @@ module SDL
       LibSDL.SDL_SetRenderDrawColor(@ptr, r, g, b, a)
     end
 
+    # How fill_rect / draw_line etc. combine with what is already there:
+    # :none (alpha ignored, the default), :blend, :add, :mod or :mul.
+    def blend_mode=(mode)
+      m = LibSDL::BLENDMODE_NONE
+      m = LibSDL::BLENDMODE_BLEND if mode == :blend
+      m = LibSDL::BLENDMODE_ADD if mode == :add
+      m = LibSDL::BLENDMODE_MOD if mode == :mod
+      m = LibSDL::BLENDMODE_MUL if mode == :mul
+      LibSDL.SDL_SetRenderDrawBlendMode(@ptr, m)
+    end
+
     def clear
       LibSDL.SDL_RenderClear(@ptr)
     end
