@@ -47,7 +47,8 @@ module SDL
 
     # player: which gamepad (SDL enumeration index) this instance listens to.
     # gamepad: false skips opening one — events from any pad are then
-    # accepted, which is what the tests rely on.
+    # accepted, which is what the tests rely on (with gamepad: true and no
+    # pad found, pad events are ignored until one is hot-plugged).
     # repeat: gamepad direction auto-repeat on/off.
     def initialize(player: 0, gamepad: true, repeat: true)
       @player = player
@@ -362,8 +363,13 @@ module SDL
 
     # ---- Internals ----
 
+    # With a pad open, only its events count. Without one, events are
+    # ignored (so player 2 never reacts to player 1's pad) unless this
+    # instance was created with gamepad: false, which accepts any pad —
+    # what the synthetic-event tests rely on.
     def mine?(which)
-      @pad_id == -1 || which == @pad_id
+      return which == @pad_id if @pad_id != -1
+      !@want_pad
     end
 
     # Any bound key or button currently down (not the stick).

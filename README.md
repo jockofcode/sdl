@@ -258,7 +258,7 @@ end
 controls.close
 ```
 
-`Controls.new(gamepad: false)` skips opening a pad and then accepts events from any pad id (what `test/controls.rb` relies on); `repeat: false` turns off the direction auto-repeat. Two-player games make one instance per `player:` index. A game that also wants raw access keeps using `SDL::Gamepad` / `SDL::Event` alongside.
+`Controls.new(gamepad: false)` skips opening a pad and then accepts events from any pad id (what `test/controls.rb` relies on); with the default `gamepad: true` an instance only ever listens to the pad it opened, so a second player without a pad is not steered by the first player's; `repeat: false` turns off the direction auto-repeat. Two-player games make one instance per `player:` index. A game that also wants raw access keeps using `SDL::Gamepad` / `SDL::Event` alongside.
 
 ### `SDL::PauseMenu`
 
